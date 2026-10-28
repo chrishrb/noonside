@@ -51,8 +51,12 @@ func Init(cfg Config) (flush func(), err error) {
 	return Flush, err
 }
 
-// Enabled reports whether events are sent.
-func Enabled() bool { return sentry.CurrentHub().Client() != nil }
+// Enabled reports whether events are sent. The SDK's default hub has a
+// client without a DSN (sentry-go 0.50+), which sends nothing.
+func Enabled() bool {
+	c := sentry.CurrentHub().Client()
+	return c != nil && c.Options().Dsn != ""
+}
 
 // Flush waits until queued events are sent (at most flushTimeout).
 func Flush() { sentry.Flush(flushTimeout) }
