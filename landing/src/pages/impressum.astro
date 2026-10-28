@@ -1,0 +1,29 @@
+---
+// Impressum (§ 5 DDG, § 18 Abs. 2 MStV). Operator details come from
+// src/lib/site.ts (PUBLIC_OPERATOR_*).
+import Base from '../layouts/Base.astro';
+import { operator } from '../lib/site';
+---
+<Base title="Impressum" description="Impressum von noonside." noindex>
+  <section class="page">
+    <div class="wrap prose">
+      <h1>Impressum</h1>
+      <h2>Angaben gemäß § 5 DDG</h2>
+      <address>
+        {operator.name}<br />
+        {operator.street}<br />
+        {operator.city}<br />
+        Deutschland
+      </address>
+      <h2>Kontakt</h2>
+      <p>
+        E-Mail: <a href={`mailto:${operator.email}`}>{operator.email}</a>
+        {operator.phone && <><br />Telefon: {operator.phone}</>}
+      </p>
+      <h2>Verantwortlich für den Inhalt nach § 18 Abs. 2 MStV</h2>
+      <p>{operator.name}, Anschrift wie oben.</p>
+      <h2>Verbraucherstreitbeilegung</h2>
+      <p>Wir sind nicht bereit und nicht verpflichtet, an Streitbeilegungsverfahren vor einer Verbraucherschlichtungsstelle teilzunehmen.</p>
+    </div>
+  </section>
+</Base>

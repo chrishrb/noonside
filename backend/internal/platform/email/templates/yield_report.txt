@@ -1,0 +1,19 @@
+{{define "content"}}{{.Data.Heading}}
+
+{{.Data.Intro}}
+{{range .Data.Facts}}
+{{index . 0}}: {{index . 1}}{{end}}
+{{if .Data.Inverters}}
+{{.Data.InvertersHeading}}:{{range .Data.Inverters}}
+* {{.Name}}: {{.Energy}} ({{.Share}}){{end}}
+{{end}}
+{{.Data.AlertsHeading}}:{{range .Data.Alerts}}
+* {{.Title}} ({{.Body}})
+  {{.URL}}{{else}}
+{{.Data.NoAlerts}}{{end}}
+
+{{.Data.ButtonLabel}}:
+{{.Data.ButtonURL}}{{end}}
+
+{{define "footer"}}{{.Data.Footer}}
+{{.Data.ManageLabel}}: {{.Data.ManageURL}}{{end}}

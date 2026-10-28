@@ -1,0 +1,31 @@
+# Weekly dependency updates. Minor and patch updates are grouped into one pull
+# request per ecosystem; majors come one by one. Tool versions (Go, Node, pnpm,
+# golangci-lint) live in mise.toml and are not managed here; the
+# base images in backend/Dockerfile and web/Dockerfile follow them.
+version: 2
+updates:
+  - package-ecosystem: gomod
+    directory: /backend
+    schedule: { interval: weekly, day: monday }
+    cooldown: { default-days: 3 }
+    commit-message: { prefix: go }
+    groups:
+      go:
+        update-types: [minor, patch]
+
+  - package-ecosystem: npm # pnpm, from web/pnpm-lock.yaml
+    directory: /web
+    schedule: { interval: weekly, day: monday }
+    cooldown: { default-days: 3 }
+    commit-message: { prefix: web }
+    groups:
+      web:
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directories: [/, /.github/actions/*] # workflows and composite actions
+    schedule: { interval: weekly, day: monday }
+    commit-message: { prefix: ci }
+    groups:
+      actions:
+        patterns: ["*"]

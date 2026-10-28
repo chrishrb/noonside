@@ -1,0 +1,95 @@
+{{- $sentry := .Values.sentry -}}
+# The web app: static files and /config.js from nginx (web/nginx). Stateless,
+# so it rolls without downtime and can run several replicas.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "noonside.webName" . }}
+  labels:
+    {{- include "noonside.labels" . | nindent 4 }}
+    app.kubernetes.io/component: web
+  {{- with .Values.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  replicas: {{ .Values.web.replicas }}
+  selector:
+    matchLabels:
+      {{- include "noonside.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: web
+  template:
+    metadata:
+      labels:
+        {{- include "noonside.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: web
+      {{- with .Values.web.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 101
+        runAsGroup: 101
+        seccompProfile:
+          type: RuntimeDefault
+      enableServiceLinks: false
+      containers:
+        - name: web
+          image: {{ include "noonside.webImage" . }}
+          imagePullPolicy: {{ .Values.web.image.pullPolicy }}
+          env:
+            # Extra connect-src hosts of the CSP (the API and GoTrue share the origin).
+            - name: CSP_CONNECT_SRC
+              value: {{ .Values.web.cspConnectSrc | quote }}
+            {{- if $sentry.enabled }}
+            - name: SENTRY_DSN
+              value: {{ $sentry.web.dsn | quote }}
+            - name: SENTRY_ENVIRONMENT
+              value: {{ default .Values.environment $sentry.environment | quote }}
+            - name: SENTRY_TRACES_SAMPLE_RATE
+              value: {{ $sentry.web.tracesSampleRate | quote }}
+            - name: SENTRY_REPLAYS_ON_ERROR_SAMPLE_RATE
+              value: {{ $sentry.web.replaysOnErrorSampleRate | quote }}
+            {{- end }}
+          ports:
+            - name: http
+              containerPort: 8080
+          readinessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 20
+          resources:
+            {{- toYaml .Values.web.resources | nindent 12 }}
+          securityContext:
+            {{- include "noonside.securityContext" . | nindent 12 }}
+          volumeMounts:
+            # nginx writes its config (from the templates) and temp files here.
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "noonside.webName" . }}
+  labels:
+    {{- include "noonside.labels" . | nindent 4 }}
+    app.kubernetes.io/component: web
+spec:
+  selector:
+    {{- include "noonside.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: web
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http

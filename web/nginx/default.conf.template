@@ -1,0 +1,58 @@
+# The web app's server in the web image (web/Dockerfile). nginx's
+# entrypoint substitutes the ${…} env vars (defaults in the Dockerfile) when
+# the container starts; nginx's own $variables are left alone.
+server {
+    listen 8080;
+    server_name _;
+    root /usr/share/nginx/html;
+    server_tokens off;
+
+    gzip on;
+    gzip_types text/css application/javascript application/json image/svg+xml application/manifest+json;
+
+    # The installation's settings (lib/runtimeConfig.ts).
+    location = /config.js {
+        include /etc/nginx/conf.d/headers.inc;
+        add_header Cache-Control "no-cache" always;
+        default_type application/javascript;
+        return 200 'window.__NOONSIDE__={"sentryDsn":"${SENTRY_DSN}","sentryEnvironment":"${SENTRY_ENVIRONMENT}","sentryTracesSampleRate":"${SENTRY_TRACES_SAMPLE_RATE}","sentryReplaysOnErrorSampleRate":"${SENTRY_REPLAYS_ON_ERROR_SAMPLE_RATE}"};\n';
+    }
+
+    # Probes (the gateway sends the public /healthz to the API).
+    location = /healthz {
+        access_log off;
+        default_type text/plain;
+        return 200 'OK';
+    }
+
+    # Vite puts content-hashed files under /assets.
+    location ^~ /assets/ {
+        include /etc/nginx/conf.d/headers.inc;
+        add_header Cache-Control "public, max-age=31536000, immutable" always;
+        try_files $uri =404;
+    }
+
+    # Not in nginx's MIME types; browsers expect it for the PWA manifest.
+    location ~ \.webmanifest$ {
+        include /etc/nginx/conf.d/headers.inc;
+        add_header Cache-Control "no-cache" always;
+        types { }
+        default_type application/manifest+json;
+        try_files $uri =404;
+    }
+
+    # The rest (sw.js, icons) keep their names, so they are
+    # revalidated. A missing file with an extension is a real 404, not a route.
+    location ~ \.[A-Za-z0-9]+$ {
+        include /etc/nginx/conf.d/headers.inc;
+        add_header Cache-Control "no-cache" always;
+        try_files $uri =404;
+    }
+
+    # Client-side routes (/s/…/overview) get index.html.
+    location / {
+        include /etc/nginx/conf.d/headers.inc;
+        add_header Cache-Control "no-cache" always;
+        try_files $uri /index.html;
+    }
+}

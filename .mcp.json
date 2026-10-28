@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "playwright": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@playwright/mcp@latest",
+        "--isolated",
+        "--block-service-workers",
+        "--viewport-size",
+        "1280,800",
+        "--output-dir",
+        ".playwright-mcp"
+      ]
+    }
+  }
+}

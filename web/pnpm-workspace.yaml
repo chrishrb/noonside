@@ -1,0 +1,4 @@
+allowBuilds:
+  # The binary comes from its optional platform package; the install script is
+  # only a fallback download.
+  '@sentry/cli': false

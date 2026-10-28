@@ -1,0 +1,249 @@
+name: CI
+
+# Pushes and pull requests that only change documentation start no run, and
+# so no deploy either (Deploy follows every successful CI run on main).
+on:
+  push:
+    branches: [main]
+    paths-ignore: &docs
+      - "**.md"
+      - docs/**
+      - .mcp.json
+  pull_request:
+    paths-ignore: *docs
+  # Started on main after a Dependabot merge (see automerge below).
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+# Tool versions come from mise.toml; each job installs only what it needs.
+# Jobs only run when their files changed (see `changes`); a manual run and
+# anything touching CI or mise.toml run everything.
+jobs:
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read # changed files of a pull request
+    outputs:
+      go: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.go == 'true' }}
+      web: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.web == 'true' }}
+      landing: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.landing == 'true' }}
+      chart: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.chart == 'true' }}
+      actions: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.actions == 'true' }}
+    steps:
+      - uses: actions/checkout@v7
+        if: github.event_name == 'push'
+      - id: filter
+        if: github.event_name != 'workflow_dispatch'
+        uses: dorny/paths-filter@v4
+        with:
+          filters: |
+            shared: &shared
+              - mise.toml
+              - .github/workflows/ci.yml
+              - .github/actions/**
+            go:
+              - *shared
+              - backend/**
+              - deploy/helm/noonside/files/init.sql
+              - compose.yaml
+              - web/package.json # generate:check runs @hey-api/openapi-ts
+              - web/openapi-ts.config.ts
+              - web/pnpm-lock.yaml
+            web:
+              - *shared
+              - web/**
+            chart:
+              - *shared
+              - deploy/**
+            landing:
+              - *shared
+              - landing/**
+              - web/src/styles/tokens.css # imported by the landing site
+            actions:
+              - mise.toml
+              - .github/**
+
+  # Go build, module and lint caches. Every run restores the newest one; runs
+  # on main save a new one (keys end in the run id, since a cache entry is
+  # never overwritten), so later runs only rebuild the packages that changed.
+  # Pull requests don't save, which keeps them from filling the quota.
+  go:
+    name: Go lint, unit tests & generated code
+    needs: changes
+    if: needs.changes.outputs.go == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: jdx/mise-action@v5
+        with:
+          install_args: go golangci-lint node pnpm
+      - uses: actions/cache/restore@v6
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+            ~/.cache/golangci-lint
+          key: go-${{ runner.os }}-${{ hashFiles('backend/go.sum') }}-${{ github.run_id }}
+          restore-keys: |
+            go-${{ runner.os }}-${{ hashFiles('backend/go.sum') }}-
+            go-${{ runner.os }}-
+      - uses: ./.github/actions/pnpm-cache
+      - run: mise run lint
+      - run: mise run test
+      - run: mise run web:install
+      - run: mise run generate:check
+      - if: always() && github.ref == 'refs/heads/main'
+        uses: actions/cache/save@v6
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+            ~/.cache/golangci-lint
+          key: go-${{ runner.os }}-${{ hashFiles('backend/go.sum') }}-${{ github.run_id }}
+
+  integration:
+    name: Integration tests (compose stack)
+    needs: changes
+    if: needs.changes.outputs.go == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: jdx/mise-action@v5
+        with:
+          install_args: go
+      - uses: actions/cache/restore@v6
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: go-integration-${{ runner.os }}-${{ hashFiles('backend/go.sum') }}-${{ github.run_id }}
+          restore-keys: |
+            go-integration-${{ runner.os }}-${{ hashFiles('backend/go.sum') }}-
+            go-integration-${{ runner.os }}-
+      # The tests need Postgres, the Auth server (GoTrue) and Mailpit for the
+      # emails GoTrue sends itself (password reset); the app's own emails go
+      # to an in-memory outbox. The tests compile while the containers start.
+      - name: Start the stack, compile the tests
+        run: |
+          docker compose up -d --wait > "$RUNNER_TEMP/compose.log" 2>&1 &
+          pid=$!
+          go -C backend test -tags=integration -c -o "$RUNNER_TEMP/" ./internal/integration/...
+          if ! wait "$pid"; then
+            cat "$RUNNER_TEMP/compose.log"
+            docker compose logs
+            exit 1
+          fi
+      - run: mise run test:integration
+      - if: failure()
+        run: docker compose logs auth postgres sftpgo
+      - if: always()
+        run: docker compose down -v
+      - if: always() && github.ref == 'refs/heads/main'
+        uses: actions/cache/save@v6
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: go-integration-${{ runner.os }}-${{ hashFiles('backend/go.sum') }}-${{ github.run_id }}
+
+  web:
+    name: Web typecheck, lint, tests & build
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: jdx/mise-action@v5
+        with:
+          install_args: node pnpm
+      - uses: ./.github/actions/pnpm-cache
+      - run: mise run web:install
+      - run: mise run web:lint
+      - run: mise run web:test
+      - run: mise run web:build
+
+  landing:
+    name: Landing site typecheck & build
+    needs: changes
+    if: needs.changes.outputs.landing == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: jdx/mise-action@v5
+        with:
+          install_args: node pnpm
+      - uses: ./.github/actions/pnpm-cache
+      - run: mise run landing:install
+      - run: mise run landing:build
+
+  chart:
+    name: Helm chart lint & validate
+    needs: changes
+    if: needs.changes.outputs.chart == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: jdx/mise-action@v5
+        with:
+          install_args: helm kubeconform
+      - run: mise run chart:lint
+
+  actions:
+    name: Workflow lint (actionlint)
+    needs: changes
+    if: needs.changes.outputs.actions == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: jdx/mise-action@v5
+        with:
+          install_args: actionlint
+      - run: mise run lint:actions
+
+  # Dependabot minor and patch updates are merged once every job above has
+  # passed or was skipped (nothing it checks changed); majors stay open for
+  # review. There is no branch protection on this plan, so GitHub's own
+  # auto-merge would not wait for CI.
+  automerge:
+    name: Merge Dependabot update
+    needs: [changes, go, integration, web, landing, chart, actions]
+    if: >-
+      always() &&
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.user.login == 'dependabot[bot]' &&
+      !contains(needs.*.result, 'failure') &&
+      !contains(needs.*.result, 'cancelled')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write # merge
+      pull-requests: write
+      actions: write # start CI on main
+    steps:
+      - id: meta
+        uses: dependabot/fetch-metadata@v3
+      # For grouped updates this is the largest update in the group.
+      - if: steps.meta.outputs.update-type == 'version-update:semver-minor' || steps.meta.outputs.update-type == 'version-update:semver-patch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: |
+          gh pr merge "$PR_URL" --squash --delete-branch
+          # A push made with GITHUB_TOKEN starts no workflows, so run CI on
+          # main by hand; Deploy follows it as after any push.
+          gh workflow run ci.yml --ref main --repo "$GITHUB_REPOSITORY"

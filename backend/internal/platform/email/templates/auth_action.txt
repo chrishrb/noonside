@@ -1,0 +1,10 @@
+{{define "content"}}{{.Data.Title}}
+
+{{.Data.Intro}}
+
+{{.Data.ButtonLabel}}:
+{{.Data.URL}}
+
+{{.Data.Note}}{{end}}
+
+{{define "footer"}}You received this email because of a request for your {{.App.Name}} account.{{end}}

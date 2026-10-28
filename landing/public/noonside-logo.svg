@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="512" height="512" role="img" aria-label="noonside">
+  <title>noonside</title>
+  <rect width="32" height="32" rx="8" fill="#c2410c"/>
+  <path d="M11.5 24v-5.5a4.5 4.5 0 0 1 9 0v5.5" fill="none" stroke="#ffffff" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="16" cy="8" r="2.5" fill="#ffffff"/>
+</svg>

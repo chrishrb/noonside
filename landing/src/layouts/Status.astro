@@ -1,0 +1,18 @@
+---
+// Small centered page for the steps of the waitlist flow.
+import Base from './Base.astro';
+import Icon from '../components/Icon.astro';
+
+interface Props { title: string; icon?: 'mail' | 'check' | 'x' | 'clock'; ok?: boolean }
+const { title, icon = 'mail', ok = false } = Astro.props;
+---
+<Base title={title} description={title} noindex>
+  <section class="page">
+    <div class="wrap page-narrow">
+      <div class:list={['status-icon', ok && 'ok']}><Icon name={icon} size={28} /></div>
+      <h1>{title}</h1>
+      <slot />
+    </div>
+  </section>
+  <slot name="end" slot="end" />
+</Base>

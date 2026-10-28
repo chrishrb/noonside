@@ -1,0 +1,11 @@
+{{define "content"}}{{.Data.Subject}}
+{{range .Data.Items}}
+* {{.Title}}
+  {{.Body}}
+  {{.URL}}
+{{end}}
+{{.Data.ButtonLabel}}:
+{{.Data.ButtonURL}}{{end}}
+
+{{define "footer"}}{{.Data.Footer}}
+{{.Data.ManageLabel}}: {{.Data.ManageURL}}{{end}}

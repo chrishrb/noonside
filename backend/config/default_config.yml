@@ -1,0 +1,130 @@
+http_port: 8080
+public_url: http://localhost:5173
+# Origins allowed to call the API from a browser ("*" allows any).
+cors_allowed_origins:
+  - http://localhost:5173
+invitation_ttl: 168h
+# Landing site (landing/) whose waitlist forms post to /api/v1/waitlist/* and
+# get redirected back there. Empty disables the waitlist endpoints.
+landing_url: ""
+# Cap on waitlist confirmation emails per hour across all addresses, so a
+# flood of sign-ups can't burn the SMTP account's reputation.
+waitlist_mails_per_hour: 30
+# Profile and system pictures, served under /media/ from this directory
+# (relative paths are relative to this config directory). Empty disables
+# uploads.
+media_dir: ""
+# Email templates of the Auth server, served under /auth-templates/ for
+# GoTrue (GOTRUE_MAILER_TEMPLATES_*). Empty: not served.
+auth_templates_dir: ""
+# SQL files `noonside migrate` applies (relative to this config directory).
+migrations_dir: ../db/migrations
+# Per-IP limits on /api/* (internal/router/ratelimit.go). Behind a proxy set
+# trusted_proxy_hops to the number of proxies appending to X-Forwarded-For
+# (1 behind the cluster's gateway); 0 uses the peer address.
+rate_limit_enabled: false
+trusted_proxy_hops: 0
+# Let solarlog_remote data sources connect to private/local addresses
+# (10.x, 192.168.x, 127.0.0.1, …). Off, so system admins cannot probe the
+# server's network; enable it when the FTP server runs in your LAN.
+allow_private_data_source_hosts: false
+scheduler_enabled: true
+# Error reporting and tracing to Sentry (DSN of the API project, not a
+# secret). Empty disables it. Errors logged at level Error become Sentry
+# events; see internal/platform/errtrack.
+sentry_dsn: ""
+# Environment tag of the events; empty uses ENVIRONMENT.
+sentry_environment: ""
+sentry_traces_sample_rate: 0.1
+# Scheduler jobs and data source runs: every job runs each minute, so a
+# lower rate keeps the span quota for requests.
+sentry_job_traces_sample_rate: 0.01
+# DSN of the web app's Sentry project (SENTRY_DSN of the web container).
+# The app sends its events through the API (/api/v1/diag), which forwards
+# only this project's; empty answers 404 there.
+sentry_web_dsn: ""
+# Email (SMTP). Empty smtp_host disables delivery.
+smtp_host: ""
+smtp_port: 587
+# starttls | tls | opportunistic | none
+smtp_tls: starttls
+smtp_username: ""
+mail_from: ""
+mail_from_name: noonside
+# Web Push (VAPID). Generate a pair with `noonside keygen vapid`; the public key
+# goes here, the private key into VAPID_PRIVATE_KEY. Without the private key
+# push notifications are disabled. vapid_subject is a contact address for the
+# push services (defaults to mail_from).
+vapid_public_key: ""
+vapid_subject: ""
+# Weather forecasts (current conditions, expected power) from Open-Meteo for
+# systems with coordinates. The free API is for non-commercial use only; for
+# commercial use set OPEN_METEO_API_KEY and https://customer-api.open-meteo.com
+# (or a self-hosted instance).
+weather_enabled: true
+weather_base_url: https://api.open-meteo.com
+# Past days (expected energy and curves): archived forecasts from 2022
+# (15 minutes) and the ERA5 archive before (hourly). Commercial use:
+# customer-historical-forecast-api / customer-archive-api.
+weather_historical_url: https://historical-forecast-api.open-meteo.com
+weather_archive_url: https://archive-api.open-meteo.com
+# Address search and validation for system locations (Photon, OpenStreetMap
+# data). The public instance is free for fair use; for heavy or commercial use
+# run your own. Empty disables it (addresses are then not validated).
+geocode_base_url: https://photon.komoot.io
+# Monthly target estimates from PVGIS (EU JRC, free, no key). Empty disables
+# the estimate.
+pvgis_base_url: https://re.jrc.ec.europa.eu/api/v5_3
+# Day-ahead prices (EPEX spot) for systems with a price zone: the price band
+# in the day chart, feed-in at negative prices and the cheapest window. From
+# aWATTar's free API (fair use: up to 100 requests a day; DE-LU and AT) unless
+# ENTSOE_API_TOKEN is set, then from the ENTSO-E Transparency Platform.
+prices_enabled: true
+awattar_de_url: https://api.awattar.de
+awattar_at_url: https://api.awattar.at
+entsoe_base_url: https://web-api.tp.entsoe.eu/api
+# PVOutput.org, for pvoutput_export data sources.
+pvoutput_base_url: https://pvoutput.org
+# Hosted FTP (solarlog_hosted): noonside's own SFTPGo server, where noonside
+# creates one user per data source. Devices upload over FTP, SFTPGo reports
+# each upload to the API's hook, and the scheduler reads the files over SFTP.
+# Off without hosted_ftp_api_url and the SFTPGO_ADMIN_PASSWORD secret.
+# SFTPGo's REST API (server root, e.g. http://sftpgo:8080) and its admin.
+hosted_ftp_api_url: ""
+hosted_ftp_admin_user: admin
+# Where the API reads the uploads over SFTP (host:port).
+hosted_ftp_sftp_addr: ""
+# SFTPGo's SSH host key (authorized_keys format); empty: read from
+# hosted_ftp_sftp_addr when an account is created.
+hosted_ftp_host_key: ""
+# Where devices upload over FTP/FTPS (shown to the user).
+hosted_ftp_public_host: ""
+hosted_ftp_public_port: 21
+# Users' home directories on the SFTPGo server (absolute).
+hosted_ftp_home_base: /srv/sftpgo/data
+# The upload hook as SFTPGo reaches it; empty: <public_url>/api/v1/hooks/hosted-ftp.
+hosted_ftp_hook_url: ""
+# Upload quota per source; SFTPGo refuses uploads beyond it.
+hosted_ftp_quota_mb: 200
+# Imported dated minute files (minYYMMDD.js) are deleted after this.
+hosted_ftp_retention_days: 14
+# Hosted sources across all systems (0: no limit).
+hosted_ftp_max_accounts: 0
+# Public URL the SPA signs in at: the Auth server (GoTrue) is reached as
+# <supabase_url>/auth/v1, which is also the tokens' issuer. In production the
+# app's own origin.
+supabase_url: ""
+# Where the server reaches GoTrue directly, e.g. http://noonside-auth:9999 in
+# the cluster (no /auth/v1 prefix). Empty: <supabase_url>/auth/v1.
+supabase_internal_url: ""
+# Secrets must come from the environment:
+#   DATABASE_URL          Postgres connection (URL or key=value; libpq PG*
+#                         variables such as PGPASSWORD fill in the rest)
+#   SUPABASE_SECRET_KEY   service_role key of GoTrue's admin API (`noonside keygen gotrue`)
+#   SUPABASE_JWT_SECRET   optional legacy HS256 JWT secret
+#   SMTP_PASSWORD         SMTP password
+#   SECRET_KEY            base64 32-byte key for data source passwords (`noonside keygen`)
+#   VAPID_PRIVATE_KEY     optional Web Push signing key (`noonside keygen vapid`)
+#   OPEN_METEO_API_KEY    optional Open-Meteo key (commercial use)
+#   ENTSOE_API_TOKEN      optional ENTSO-E security token (day-ahead prices)
+#   SFTPGO_ADMIN_PASSWORD optional password of the SFTPGo admin (hosted FTP)

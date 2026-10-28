@@ -1,0 +1,293 @@
+---
+import Base from '../layouts/Base.astro';
+import Icon from '../components/Icon.astro';
+import Screenshot from '../components/Screenshot.astro';
+import LockScreen from '../components/LockScreen.astro';
+import PlanCards from '../components/PlanCards.astro';
+import WaitlistForm from '../components/WaitlistForm.astro';
+import { DEMO_URL } from '../lib/site';
+
+const title = 'noonside: unabhängiges PV-Monitoring, das bleibt';
+const description = 'Ihre Photovoltaikanlage läuft 25 Jahre, Ihr Portal nicht. noonside hält Historie, Alarme und Soll-Ertrag in Ihrer Hand, egal welcher Logger, Hersteller oder Installateur. Für Solar-Log und Home Assistant. Jetzt auf die Warteliste.';
+
+// What outlives a PV system's 25 years, and what doesn't. Competitors stay
+// unnamed (comparative advertising, § 6 UWG).
+const problems = [
+  { icon: 'history', title: 'Das Portal wird umgestellt', text: 'Nach einer Migration sind nur noch Wochen an Kurven übrig, vertraute Funktionen fehlen, und eine neue App ist Pflicht.' },
+  { icon: 'unplug', title: 'Der Speicher wird abgeschaltet', text: 'Webhoster stellen FTP ein, und der Logger schickt seine Daten ins Leere. Oft merkt das monatelang niemand.' },
+  { icon: 'userX', title: 'Der Installateur gibt auf', text: 'Das Portal lief über sein Konto. Mit dem Betrieb verschwinden der Zugang zur Anlage und die Historie.' },
+  { icon: 'lock', title: 'Grundfunktionen im Abo', text: 'Alarme per E-Mail, längere Historie oder der CSV-Export kosten extra, Jahr für Jahr.' },
+] as const;
+
+const integrations = [
+  { title: 'Home Assistant & Grafana', text: 'Lese-API mit eigenem Schlüssel, Beispiele inklusive.' },
+  { title: 'Webhooks', text: 'Alarme, Tageszusammenfassung und Überschussprognose als signiertes JSON.' },
+  { title: 'ntfy', text: 'Alarme auf Ihren eigenen ntfy-Server oder ntfy.sh.' },
+  { title: 'PVOutput', text: 'Lädt Ihre Daten automatisch zu PVOutput.org hoch.' },
+  { title: 'Historie-Import', text: 'Übernimmt die komplette Historie aus Ihrem Solar-Log-Export.' },
+  { title: 'CSV-Export', text: 'Ihre Daten gehören Ihnen: jederzeit vollständig exportierbar.' },
+];
+
+const audiences = [
+  { icon: 'sun', title: 'Solar-Log und Ü20-Anlagen', text: 'Ihr Logger läuft weiter, nur das Drumherum wird neu: FTP-Zugang, Historie, Alarme und eine App fürs Handy. Auch für Anlagen, deren EEG-Vergütung ausläuft.' },
+  { icon: 'users', title: 'Familien, Mehrparteienhäuser, Gemeinschaften', text: 'Mehrere Anlagen in einem Konto, jede Person mit eigener Rolle. Freigabe-Links und Kiosk-Modus für alle, die nur zuschauen.' },
+  { icon: 'home', title: 'Home-Assistant-Nutzer', text: 'noonside liefert, was Home Assistant nicht kann: Soll-Ertrag, saubere Alarme und Jahresvergleiche. Per API und Webhook wieder in Ihre Automationen.' },
+  { icon: 'wrench', title: 'Installateure', text: 'Alle Anlagen Ihrer Kunden in einer Übersicht, unabhängig vom Hersteller. Ihre Kunden bleiben Eigentümer, Sie bekommen die Alarme mit.' },
+] as const;
+
+const faqs = [
+  { q: 'Wem gehören meine Daten, und wo liegen sie?', a: ['Ihnen. Sie können jederzeit alles als CSV exportieren und Ihre Anlage samt Daten löschen. Die Daten Ihrer Anlage liegen ausschließlich in Rechenzentren in Deutschland (Frankfurt am Main, für hochgeladene Solar-Log-Dateien Falkenstein). E-Mails verschicken wir über einen Dienst in Frankreich.', 'Das Konto gehört Ihnen, nicht Ihrem Installateur oder dem Hersteller Ihres Loggers. Hört einer von beiden auf, bleiben Anlage und Historie bei Ihnen.'] },
+  { q: 'Und wenn es noonside eines Tages nicht mehr gibt?', a: ['Dann nehmen Sie Ihre Daten mit: als CSV, das jede Tabellenkalkulation liest, oder über die Lese-API. noonside verändert nichts an Ihrer Anlage und schaltet keine Geräte. Ihr Logger schreibt seine Dateien einfach an ein anderes Ziel.'] },
+  { q: 'Mein Webhoster hat den FTP-Zugang abgeschaltet. Was nun?', a: ['noonside richtet Ihnen einen eigenen FTP-Zugang ein. Sie tragen ihn im Solar-Log als Exportziel ein, und die Daten kommen wieder an. Die bisherige Historie übernehmen Sie aus dem letzten Export.', 'Haben Sie einen eigenen FTP- oder SFTP-Server, holt noonside die Dateien auch dort ab.'] },
+  { q: 'Meine Anlage fällt aus der EEG-Vergütung. Lohnt sich Monitoring noch?', a: ['Gerade dann: Die Module laufen oft noch viele Jahre, aber Logger und Portale sind alt. noonside arbeitet mit Ihrem vorhandenen Solar-Log weiter, meldet Ausfälle und zeigt mit Ertragshistorie und Strompreisen, wann Ihr Strom am meisten wert ist.'] },
+  { q: 'Wie unterscheidet noonside eine Störung von einem bewölkten Tag?', a: ['Für jede Anlage berechnet noonside aus Wetterdaten (Einstrahlung auf Ihre Modulflächen, Temperatur) den Ertrag, der an diesem Tag möglich war. Ein Alarm kommt erst, wenn die Anlage deutlich darunter bleibt, oder wenn einzelne Wechselrichter im Vergleich zu den anderen abfallen.', 'Dazu kommen klare Fälle wie fehlende Daten, ein Wechselrichter offline oder ein Fehlercode. Ist das Problem behoben, schließt noonside den Alarm von selbst.'] },
+  { q: 'Welche Geräte werden unterstützt?', a: ['Heute Solar-Log (FTP-Export, auch über einen von uns bereitgestellten FTP-Zugang) und jedes Gerät oder Skript, das unsere Push-API ansprechen kann. Fronius, SMA und ein lokaler Agent für weitere Hersteller sind geplant.'] },
+  { q: 'Gibt es eine App?', a: ['noonside läuft im Browser und lässt sich auf dem Handy zum Startbildschirm hinzufügen, mit Push-Benachrichtigungen. Eine App für iPhone und Android mit Widgets für den Startbildschirm ist geplant.'] },
+  { q: 'Wann geht es los?', a: ['Wir bereiten gerade eine kleine, kostenlose Beta mit echten Anlagen vor. Wer auf der Warteliste steht, erfährt als Erstes davon und kann sich für die Beta melden.'] },
+  { q: 'Was passiert, wenn ich kündige?', a: ['Sie exportieren Ihre Daten und löschen Ihr Konto. Das Monatsabo hat keine Mindestlaufzeit, das Jahresabo läuft bis zum Ende des bezahlten Jahres, und es gibt keine Hardware, die Sie zurückgeben müssten.'] },
+  { q: 'Warum kostet eine große Anlage nicht mehr?', a: ['Viele Portale rechnen nach kWp oder Wechselrichterleistung ab, und mit jeder Erweiterung steigt der Preis. Bei noonside zahlen Sie pro Konto: Pro deckt bis zu 5 Anlagen ab, egal wie groß sie sind. Nur Installateure, die viele Kundenanlagen betreuen, zahlen pro Anlage.'] },
+  { q: 'Sind die Preise schon fest?', a: ['Nein, sie sind vorläufig. Während der Beta ist noonside kostenlos, und vor der ersten Rechnung fragen wir Sie, ob Sie weitermachen möchten.'] },
+];
+
+const jsonLd = JSON.stringify({
+  '@context': 'https://schema.org',
+  '@type': 'SoftwareApplication',
+  name: 'noonside',
+  applicationCategory: 'BusinessApplication',
+  operatingSystem: 'Web',
+  description,
+  inLanguage: 'de',
+  offers: { '@type': 'Offer', price: '0', priceCurrency: 'EUR' },
+});
+---
+<Base title={title} description={description}>
+  <script slot="head" type="application/ld+json" set:html={jsonLd} />
+
+  <section class="hero">
+    <div class="wrap">
+      <div class="hero-copy">
+        <span class="pill"><span class="dot"></span>Beta in Vorbereitung</span>
+        <h1><span class="h1-line">Ihre Anlage läuft 25&nbsp;Jahre.</span> <span class="h1-line">Ihr Portal nicht.</span></h1>
+        <p class="lead">noonside ist das unabhängige Monitoring für Ihre Photovoltaikanlage: die ganze Historie an einem Ort, Alarme, wenn etwas nicht stimmt, und der Soll-Ertrag aus dem Wetter. Egal, welcher Logger, Hersteller oder Installateur dahintersteht.</p>
+        <div class="hero-ctas">
+          <a class="btn btn-primary" href="#warteliste">Auf die Warteliste<Icon name="arrow" size={18} /></a>
+          <a class="btn btn-secondary" href={DEMO_URL} target="_blank" rel="noopener">
+            <Icon name="play" size={18} />Live-Demo ansehen
+          </a>
+        </div>
+        <p class="hero-note"><span>Kostenlos während der Beta</span> · <span>Daten in Deutschland</span> · <span>Jederzeit exportierbar</span></p>
+      </div>
+      <div class="hero-visual">
+        <Screenshot name="history-calendar" eager sizes="(min-width: 1100px) 890px, (min-width: 760px) calc(100vw - 206px), 1px" alt="Kalender der Tageserträge in noonside: jeder Tag seit 2023 als Kästchen, eingefärbt nach Ertrag." />
+        <LockScreen
+          label="Sperrbildschirm mit zwei Mitteilungen von noonside: Wechselrichter 3 liefert weniger, als das Wetter erlaubt, und die Ertragsprognose für heute."
+          date="Freitag, 3. Oktober"
+          notes={[
+            { title: 'WR 3 liefert weniger, als das Wetter erlaubt', body: 'Demo PV · Nur 41 % des erwarteten Ertrags gestern (11,9 von 29,2 kWh).', when: 'jetzt' },
+            { title: 'Demo PV: heute etwa 84,6 kWh', body: 'Erwartet laut Wettervorhersage für heute.', when: '07:02' },
+          ]}
+        />
+      </div>
+    </div>
+  </section>
+
+  <section class="band section" aria-labelledby="problem-title">
+    <div class="wrap">
+      <div class="section-head">
+        <span class="eyebrow">Das Problem</span>
+        <h2 id="problem-title">Eine Solaranlage überlebt ihr Portal.</h2>
+        <p>Module halten 25 Jahre und länger. Portale, Apps, Webspeicher und Installationsbetriebe wechseln in dieser Zeit mehrmals, und oft gehen dabei Daten oder der Zugang verloren.</p>
+      </div>
+      <div class="grid-4">
+        {problems.map((p) => (
+          <div class="card">
+            <span class="icon"><Icon name={p.icon} /></span>
+            <h3>{p.title}</h3>
+            <p>{p.text}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="funktionen" aria-labelledby="features-title">
+    <div class="wrap">
+      <div class="section-head">
+        <span class="eyebrow">Die Lösung</span>
+        <h2 id="features-title">So bleibt Ihre Anlage in Ihrer Hand.</h2>
+      </div>
+      <div class="features">
+        <div class="feature">
+          <div>
+            <h3>Ihre ganze Historie, an einem Ort</h3>
+            <p>Bringen Sie die Jahre mit, die Ihr Solar-Log schon gesammelt hat: noonside übernimmt die komplette Historie samt Minutenwerten. Tageserträge werden nie gelöscht, und alles bleibt jederzeit als CSV und über die API abrufbar.</p>
+            <ul class="checks">
+              <li>Import aus dem Solar-Log-Export</li>
+              <li>Tageserträge ohne Ablaufdatum</li>
+              <li>CSV-Export und Lese-API inklusive</li>
+            </ul>
+          </div>
+          <Screenshot name="history-years" alt="Energie pro Jahr von 2023 bis heute, jeweils mit dem erwarteten Ertrag aus Wetterdaten." />
+        </div>
+
+        <div class="feature flip">
+          <div>
+            <h3>Unabhängig vom Gerät</h3>
+            <p>Ihr Solar-Log lädt zu einem FTP-Zugang hoch, den noonside für Sie einrichtet, auch wenn Ihr Webhoster FTP längst abgeschaltet hat. Andere Geräte und Skripte schicken ihre Daten über die Push-API, Home Assistant eingeschlossen.</p>
+            <ul class="checks">
+              <li>FTP-Zugang inklusive, kein eigener Server nötig</li>
+              <li>Eigener FTP- oder SFTP-Server geht auch</li>
+              <li>Fronius und weitere Hersteller sind geplant</li>
+            </ul>
+          </div>
+          <Screenshot name="hosted-ftp" alt="Datenquelle „Solar-Log 1200“ mit dem FTP-Zugang von noonside: Server, Benutzername, Status „In Ordnung“ und belegter Speicher." />
+        </div>
+
+        <div class="feature">
+          <div>
+            <h3>Ihr Konto, Ihre Regeln</h3>
+            <p>Die Anlage gehört Ihnen, also auch der Zugang. Laden Sie Familie, Mieter oder Ihren Installateur mit eigener Rolle ein, und nehmen Sie den Zugang wieder weg, wenn sich etwas ändert.</p>
+            <ul class="checks">
+              <li>Rollen: Eigentümer, Admin, Betrachter</li>
+              <li>Freigabe-Links und Kiosk-Modus ohne Konto</li>
+              <li>Mehrere Anlagen in einem Konto</li>
+            </ul>
+          </div>
+          <Screenshot name="members" alt="Mitglieder einer Anlage: zwei Eigentümer, der Installationsbetrieb als Admin und eine Mietpartei als Betrachter." />
+        </div>
+      </div>
+
+      <div class="integrations" aria-label="Integrationen">
+        {integrations.map((i) => (
+          <div class="integration"><strong>{i.title}</strong><span>{i.text}</span></div>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <section class="band section" id="ueberwachung" aria-labelledby="monitoring-title">
+    <div class="wrap">
+      <div class="section-head">
+        <span class="eyebrow">Überwachung</span>
+        <h2 id="monitoring-title">Und sie meldet sich, wenn etwas nicht stimmt.</h2>
+        <p>noonside prüft Ihre Anlage alle fünf Minuten und vergleicht sie mit dem, was das Wetter an Ihrem Standort erlaubt hat.</p>
+      </div>
+      <div class="features">
+        <div class="feature">
+          <div>
+            <h3>Störung oder Wolke?</h3>
+            <p>Für jeden Tag rechnet noonside aus Einstrahlung und Temperatur aus, was Ihre Module hätten liefern können, für jede Dachfläche einzeln. Bleibt die Anlage deutlich darunter, stimmt etwas nicht, und Sie erfahren es.</p>
+            <ul class="checks">
+              <li>Erwartete Leistung direkt im Tagesdiagramm</li>
+              <li>Wechselrichter im Vergleich untereinander</li>
+              <li>Plausibilitätsprüfung für jeden Messwert</li>
+            </ul>
+          </div>
+          <Screenshot name="yield-day" alt="Leistung über einen Tag: die tatsächliche Kurve bleibt deutlich unter der aus dem Wetter erwarteten, gestrichelten Kurve." />
+        </div>
+
+        <div class="feature feature-phone flip">
+          <div>
+            <h3>Alarme aufs Handy</h3>
+            <p>Keine Daten, ein Wechselrichter offline oder mit Fehler, zu wenig Ertrag, Abregelung: noonside meldet es per E-Mail, Push, ntfy oder Webhook. Und noch einmal, wenn alles behoben ist.</p>
+            <ul class="checks">
+              <li>Pro Meldung einstellbar, mit sinnvollen Standardwerten</li>
+              <li>Morgens die Prognose für den Tag</li>
+              <li>Tages- bis Jahresberichte mit Ertrag und Vergütung</li>
+            </ul>
+          </div>
+          <Screenshot name="notifications" device="phone" alt="Benachrichtigungen auf dem Handy: ein Wechselrichter liefert weniger, als das Wetter erlaubt, die Tagesprognose, ein behobener Fehler und der Monatsbericht." />
+        </div>
+      </div>
+
+      <div class="shots">
+        <div class="shot">
+          <h3>Schleichende Verluste sichtbar</h3>
+          <p>Monat für Monat gegen das Vorjahr und gegen den Soll-Ertrag aus dem Wetter. Verschmutzung, Alterung oder neue Verschattung fallen auf, bevor sie Jahre kosten.</p>
+          <Screenshot name="yield-year" alt="Energie pro Monat im Vergleich zum Vorjahr und zum erwarteten Ertrag." />
+        </div>
+        <div class="shot">
+          <h3>Negative Preise und große Verbraucher</h3>
+          <p>noonside zeigt, wie viel Sie bei negativen Börsenpreisen einspeisen (§ 51 EEG), und empfiehlt das beste Zeitfenster für Waschmaschine, Wärmepumpe oder Auto, als Signal für Home Assistant oder die Wallbox.</p>
+          <Screenshot name="advice" alt="Große Verbraucher heute: das Zeitfenster mit der meisten Solarleistung, das günstigste und die Stunden mit negativem Preis." />
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="audience-title">
+    <div class="wrap">
+      <div class="section-head">
+        <span class="eyebrow">Für wen</span>
+        <h2 id="audience-title">Für alle, die ihre Anlage noch lange betreiben wollen.</h2>
+      </div>
+      <div class="grid-2">
+        {audiences.map((a) => (
+          <div class="card">
+            <span class="icon"><Icon name={a.icon} /></span>
+            <h3>{a.title}</h3>
+            <p>{a.text}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <section class="band section" id="datenquellen" aria-labelledby="sources-title">
+    <div class="wrap">
+      <div class="section-head">
+        <span class="eyebrow">Datenquellen</span>
+        <h2 id="sources-title">Woher noonside Ihre Daten bekommt</h2>
+        <p>Wir listen nur, was heute funktioniert. Alles andere steht als „geplant“ dabei.</p>
+      </div>
+      <ul class="sources">
+        <li><div class="what"><strong>Solar-Log mit FTP-Export</strong><span>Ihr Solar-Log lädt zu einem FTP-Zugang hoch, den noonside für Sie einrichtet. Ein eigener Server ist nicht nötig.</span></div><span class="badge badge-ok">Verfügbar</span></li>
+        <li><div class="what"><strong>Eigener FTP- oder SFTP-Server</strong><span>noonside holt die Solar-Log-Dateien regelmäßig von Ihrem Server ab.</span></div><span class="badge badge-ok">Verfügbar</span></li>
+        <li><div class="what"><strong>Push-API</strong><span>Für eigene Geräte und Skripte, mit einem Schlüssel pro Anlage.</span></div><span class="badge badge-ok">Verfügbar</span></li>
+        <li><div class="what"><strong>Fronius Solar API</strong><span>Direkt vom Wechselrichter im Heimnetz.</span></div><span class="badge badge-planned">Geplant</span></li>
+        <li><div class="what"><strong>Lokaler Agent</strong><span>Ein kleines Programm im Heimnetz für SMA, Modbus und weitere Hersteller.</span></div><span class="badge badge-planned">Geplant</span></li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="section" id="preise" aria-labelledby="pricing-title">
+    <div class="wrap">
+      <div class="section-head">
+        <span class="eyebrow">Preise</span>
+        <h2 id="pricing-title">Ein fester Preis, egal wie groß die Anlage.</h2>
+        <p>Free meldet Ausfälle und bewahrt Ihre Historie, dauerhaft kostenlos. Pro vergleicht Ihre Anlage jeden Tag mit dem Wetter und findet, was ein Ausfall-Alarm nicht sieht: einen schwachen Wechselrichter, Verschmutzung, Alterung.</p>
+        <p>Anders als üblich zahlen Sie nicht nach kWp. Pro kostet gleich viel, ob 5 oder 30 kWp auf dem Dach liegen.</p>
+      </div>
+      <PlanCards />
+    </div>
+  </section>
+
+  <section class="band section" id="warteliste" aria-labelledby="waitlist-title">
+    <div class="wrap signup">
+      <div class="section-head">
+        <span class="eyebrow">Warteliste</span>
+        <h2 id="waitlist-title">Seien Sie dabei, wenn es losgeht.</h2>
+        <p>Tragen Sie sich ein, und wir melden uns, sobald die Beta startet. Die ersten Anlagen begleiten wir persönlich beim Einrichten.</p>
+        <p>Lieber erst schauen? <a href={DEMO_URL} target="_blank" rel="noopener">Die Live-Demo</a> zeigt eine echte Anlage in Echtzeit.</p>
+      </div>
+      <WaitlistForm />
+    </div>
+  </section>
+
+  <section class="section" id="faq" aria-labelledby="faq-title">
+    <div class="wrap">
+      <div class="section-head">
+        <span class="eyebrow">FAQ</span>
+        <h2 id="faq-title">Häufige Fragen</h2>
+      </div>
+      <div class="faq">
+        {faqs.map((f) => (
+          <details>
+            <summary>{f.q}</summary>
+            <div>{f.a.map((p) => <p>{p}</p>)}</div>
+          </details>
+        ))}
+      </div>
+    </div>
+  </section>
+</Base>

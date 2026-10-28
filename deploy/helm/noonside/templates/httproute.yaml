@@ -1,0 +1,78 @@
+{{- if .Values.route.enabled }}
+{{- $hsts := dict "type" "ResponseHeaderModifier" "responseHeaderModifier" (dict "set" (list (dict "name" "Strict-Transport-Security" "value" "max-age=31449600; includeSubDomains"))) -}}
+# One origin: GoTrue under /auth/v1 (without the prefix, like the Vite proxy
+# in dev), the API's paths to the API, everything else to the web app.
+# /auth-templates stays internal: GoTrue fetches it from the API's Service.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ include "noonside.fullname" . }}
+  labels:
+    {{- include "noonside.labels" . | nindent 4 }}
+spec:
+  parentRefs:
+    {{- required "route.parentRefs is required" .Values.route.parentRefs | toYaml | nindent 4 }}
+  hostnames:
+    - {{ required "host is required" .Values.host | quote }}
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /auth/v1
+      filters:
+        - type: URLRewrite
+          urlRewrite:
+            path:
+              type: ReplacePrefixMatch
+              replacePrefixMatch: /
+        - {{ toJson $hsts }}
+      backendRefs:
+        - name: {{ include "noonside.authName" . }}
+          port: 9999
+    - matches:
+        {{- range list "/api" "/media" }}
+        - path:
+            type: PathPrefix
+            value: {{ . }}
+        {{- end }}
+        {{- range list "/healthz" "/readyz" "/openapi.yaml" }}
+        - path:
+            type: Exact
+            value: {{ . }}
+        {{- end }}
+      filters:
+        - {{ toJson $hsts }}
+      backendRefs:
+        - name: {{ include "noonside.apiName" . }}
+          port: 8080
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      filters:
+        - {{ toJson $hsts }}
+      backendRefs:
+        - name: {{ include "noonside.webName" . }}
+          port: 8080
+{{- if .Values.route.redirectHostnames }}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ include "noonside.fullname" . }}-redirect
+  labels:
+    {{- include "noonside.labels" . | nindent 4 }}
+spec:
+  parentRefs:
+    {{- default .Values.route.parentRefs .Values.route.redirectParentRefs | toYaml | nindent 4 }}
+  hostnames:
+    {{- toYaml .Values.route.redirectHostnames | nindent 4 }}
+  rules:
+    - filters:
+        - type: RequestRedirect
+          requestRedirect:
+            scheme: https
+            hostname: {{ .Values.host | quote }}
+            statusCode: 301
+{{- end }}
+{{- end }}

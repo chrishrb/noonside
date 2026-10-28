@@ -1,0 +1,3278 @@
+# yaml-language-server: $schema=https://spec.openapis.org/oas/3.1/schema/2022-10-07
+openapi: 3.1.0
+
+info:
+  title: noonside API
+  version: 1.0.0
+  description: |
+    Monitoring API for photovoltaic systems.
+
+    Users sign in with Supabase Auth (supabase-js) and send the Supabase access
+    token as `Authorization: Bearer`. Devices push data and integrations read
+    it with per-system API keys (`X-API-Key`): a key carries `data:ingest`
+    (ingest endpoints), `data:read` (live, overview, daily energy, weather,
+    prices, advice) or both.
+
+    Permissions are scopes granted per system by the caller's role (looked up
+    on every request, so changes apply immediately):
+    - `viewer`: system:read, data:read, data:export, events:read
+    - `admin`: viewer + system:write, inverter:write, data:ingest, data:edit, members:*, datasource:manage, apikey:manage
+    - `admin` also has alerts:manage, share:manage and webhook:manage
+    - `owner`: admin + system:delete, may grant/revoke owner
+
+servers:
+  - url: /api/v1
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: auth
+  - name: systems
+  - name: inverters
+  - name: data
+  - name: members
+  - name: ingest
+  - name: notifications
+  - name: sharing
+  - name: waitlist
+  - name: admin
+
+paths:
+  # --- account --------------------------------------------------------------
+  /me:
+    get:
+      tags: [auth]
+      operationId: getMe
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Me" }
+        default: { $ref: "#/components/responses/Error" }
+    patch:
+      tags: [auth]
+      operationId: updateMe
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateMeRequest" }
+      responses:
+        "200":
+          description: Updated user
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Me" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /me/avatar:
+    put:
+      tags: [auth]
+      operationId: uploadMyAvatar
+      description: Sets the caller's profile picture (replaces the old one).
+      requestBody:
+        required: true
+        description: JPEG, PNG or WebP, at most 2 MB and 4096×4096 px.
+        content:
+          application/octet-stream:
+            schema: { type: string, format: binary }
+      responses:
+        "200":
+          description: Updated user
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Me" }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [auth]
+      operationId: deleteMyAvatar
+      responses:
+        "200":
+          description: Updated user
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Me" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /dashboard:
+    get:
+      tags: [data]
+      operationId: getDashboard
+      responses:
+        "200":
+          description: KPI tiles for every system the caller can see
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Dashboard" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /geocode:
+    get:
+      tags: [systems]
+      operationId: geocode
+      description: |
+        Address search for the system location (Photon, OpenStreetMap data). Signed-in users
+        only. Returns up to 5 matches, best first.
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema: { type: string, minLength: 3, maxLength: 200 }
+        - name: lang
+          in: query
+          description: Language of the labels (de, en, fr; others use local names).
+          schema: { type: string, maxLength: 5 }
+      responses:
+        "200":
+          description: Matches
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GeocodeResult" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /geocode/reverse:
+    get:
+      tags: [systems]
+      operationId: reverseGeocode
+      description: |
+        Address nearest to a position (Photon, OpenStreetMap data), for a pin moved on the map.
+        Signed-in users only. Returns at most one place; none if nothing is near.
+      parameters:
+        - name: lat
+          in: query
+          required: true
+          schema: { type: number, format: double, minimum: -90, maximum: 90 }
+        - name: lon
+          in: query
+          required: true
+          schema: { type: number, format: double, minimum: -180, maximum: 180 }
+        - name: lang
+          in: query
+          description: Language of the label (de, en, fr; others use local names).
+          schema: { type: string, maxLength: 5 }
+      responses:
+        "200":
+          description: The nearest address, if any
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GeocodeResult" }
+        default: { $ref: "#/components/responses/Error" }
+
+  # --- systems --------------------------------------------------------------
+  /systems:
+    get:
+      tags: [systems]
+      operationId: listSystems
+      responses:
+        "200":
+          description: Systems the caller is a member of
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/System" }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      tags: [systems]
+      operationId: createSystem
+      description: Superadmin only. The creator becomes owner.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SystemCreate" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/System" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /systems/{systemId}:
+    parameters:
+      - $ref: "#/components/parameters/SystemId"
+    get:
+      tags: [systems]
+      operationId: getSystem
+      description: "Scope: system:read"
+      responses:
+        "200":
+          description: System
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/System" }
+        default: { $ref: "#/components/responses/Error" }
+    patch:
+      tags: [systems]
+      operationId: updateSystem
+      description: "Scope: system:write"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SystemUpdate" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/System" }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [systems]
+      operationId: deleteSystem
+      description: "Scope: system:delete"
+      responses:
+        "204": { description: Deleted }
+        default: { $ref: "#/components/responses/Error" }
+
+  /systems/{systemId}/image:
+    parameters:
+      - $ref: "#/components/parameters/SystemId"
+    put:
+      tags: [systems]
+      operationId: uploadSystemImage
+      description: "Scope: system:write. Sets the system's picture (replaces the old one)."
+      requestBody:
+        required: true
+        description: JPEG, PNG or WebP, at most 2 MB and 4096×4096 px.
+        content:
+          application/octet-stream:
+            schema: { type: string, format: binary }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/System" }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [systems]
+      operationId: deleteSystemImage
+      description: "Scope: system:write"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/System" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /systems/{systemId}/targets/estimate:
+    parameters:
+      - $ref: "#/components/parameters/SystemId"
+    post:
+      tags: [systems]
+      operationId: estimateTargets
+      description: >-
+        Scope: system:write. Estimates the monthly targets with PVGIS (EU JRC) from the system's
+        coordinates and planes (without planes: its kWp at the optimal orientation). Nothing is
+        saved; send the result to PUT /targets. 400 without coordinates or peak power, 502 if
+        PVGIS is unavailable.
+      responses:
+        "200":
+          description: Estimated monthly targets
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MonthlyTargets" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /systems/{systemId}/targets:
+    parameters:
+      - $ref: "#/components/parameters/SystemId"
+    get:
+      tags: [systems]
+      operationId: getTargets
+      description: "Scope: system:read"
+      responses:
+        "200":
+          description: Monthly targets
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MonthlyTargets" }
+        default: { $ref: "#/components/responses/Error" }
+    put:
+      tags: [systems]
+      operationId: setTargets
+      description: "Scope: system:write"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MonthlyTargets" }
+      responses:
+        "200":
+          description: Monthly targets
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MonthlyTargets" }
+        default: { $ref: "#/components/responses/Error" }
+
+  # --- inverters ------------------------------------------------------------
+  /systems/{systemId}/inverters:
+    parameters:
+      - $ref: "#/components/parameters/SystemId"
+    get:
+      tags: [inverters]
+      operationId: listInverters
+      description: "Scope: system:read"
+      responses:
+        "200":
+          description: Inverters
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Inverter" }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      tags: [inverters]
+      operationId: createInverter
+      description: "Scope: inverter:write"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InverterCreate" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Inverter" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /systems/{systemId}/inverters/{inverterId}:
+    parameters:
+      - $ref: "#/components/parameters/SystemId"
+      - $ref: "#/components/parameters/InverterId"
+    patch:
+      tags: [inverters]
+      operationId: updateInverter
+      description: "Scope: inverter:write"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InverterUpdate" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Inverter" }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [inverters]
+      operationId: deleteInverter
+      description: "Scope: inverter:write. Deletes all of the inverter's data."
+      responses:
+        "204": { description: Deleted }
+        default: { $ref: "#/components/responses/Error" }
+
+  # --- data -----------------------------------------------------------------
+  /systems/{systemId}/live:
+    parameters:
+      - $ref: "#/components/parameters/SystemId"
+    get:
+      tags: [data]
+      operationId: getLive
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      description: "Scope: data:read. Current power and status per inverter."
+      responses:
+        "200":
+          description: Live values
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Live" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /systems/{systemId}/overview:
+    parameters:
+      - $ref: "#/components/parameters/SystemId"
+    get:
+      tags: [data]
+      operationId: getOverview
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      description: |
+        Scope: data:read. Chart series, KPI summary and per-inverter table for one period.
+        - `day`: power curve (W) in 5-minute buckets
+        - `month`: daily energy (kWh)
+        - `year`: monthly energy (kWh)
+        - `total`: yearly energy (kWh)
+      parameters:
+        - name: period
+          in: query
+          required: true
+          schema: { $ref: "#/components/schemas/Period" }
+        - name: date
+          in: query
+          description: Any date inside the period, in the system's time zone. Defaults to today.
+          schema: { type: string, format: date }
+        - name: inverters
+          in: query
+          description: Restrict to these inverters (default all).
+          style: form
+          explode: false
+          schema:
+            type: array
+            items: { type: string, format: uuid }
+        - $ref: "#/components/parameters/Compare"
+      responses:
+        "200":
+          description: Overview
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Overview" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /systems/{systemId}/daily-energy:
+    parameters:
+      - $ref: "#/components/parameters/SystemId"
+    get:
+      tags: [data]
+      operationId: getDailyEnergy
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      description: "Scope: data:read. Energy of the whole system per local day (for the calendar heatmap); days without data are left out."
+      parameters:
+        - name: from
+          in: query
+          required: true
+          schema: { type: string, format: date }
+        - name: to
+          in: query
+          required: true
+          description: Exclusive end date.
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: Daily energy
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DailyEnergy" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /systems/{systemId}/days/{day}/energy:
+    parameters:
+      - $ref: "#/components/parameters/SystemId"
+      - name: day
+        in: path
+        required: true
+        description: Local calendar date of the system.
+        schema: { type: string, format: date }
+    get:
+      tags: [data]
+      operationId: getDayEnergy
+      description: >-
+        Scope: data:read. Every inverter's energy on one day: the value the device reported and the
+        manual correction, if any. The correction is what all views, reports and alerts use.
+      responses:
+        "200":
+          description: Energy of the day
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DayEnergyDetail" }
+        default: { $ref: "#/components/responses/Error" }
+    put:
+      tags: [data]
+      operationId: setDayEnergy
+      description: >-
+        Scope: data:edit. Corrects the day's energy of the listed inverters (`energy_kwh`) or removes
+        their correction (`null`), so the device's value applies again. Later imports and pushes
+        update only the device's value and never overwrite a correction. The day must not lie in
+        the future, and values are bounded like ingest (12 kWh per kWp).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DayEnergyUpdate" }
+      responses:
+        "200":
+          description: Energy of the day after the change
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DayEnergyDetail" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /systems/{systemId}/weather:
+    parameters:
+      - $ref: "#/components/parameters/SystemId"
+    get:
+      tags: [data]
+      operationId: getWeather
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      description: |
+        Scope: data:read. Current weather and forecast at the system's coordinates (Open-Meteo,
+        cached for 15 minutes) with the expected energy per day. `available` is false when the
+        system has no coordinates, weather is disabled or no forecast could be fetched.
+      responses:
+        "200":
+          description: Weather
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Weather" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /systems/{systemId}/prices:
+    parameters:
+      - $ref: "#/components/parameters/SystemId"
+    get:
+      tags: [data]
+      operationId: getPrices
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      description: |
+        Scope: data:read. Day-ahead prices of the system's `price_zone` (EPEX spot, fetched by the
+        server) for local dates in [from, to), at most 31 days. Empty without a price zone.
+      parameters:
+        - name: from
+          in: query
+          description: First local date, default today.
+          schema: { type: string, format: date }
+        - name: to
+          in: query
+          description: Exclusive end date, default two days after from (today and tomorrow).
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: Prices
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MarketPrices" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /systems/{systemId}/advice:
+    parameters:
+      - $ref: "#/components/parameters/SystemId"
+    get:
+      tags: [data]
+      operationId: getAdvice
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      description: |
+        Scope: data:read. When to run large loads for the rest of today: the window with the most
+        expected PV power (weather forecast) and, with a price zone, the window with the lowest
+        day-ahead price, plus the hours with negative prices. Advisory only; the server never
+        switches devices. Without meters the surplus is the expected production.
+      parameters:
+        - name: hours
+          in: query
+          description: Length of the windows in hours.
+          schema: { type: integer, minimum: 1, maximum: 8, default: 3 }
+      responses:
+        "200":
+          description: Advice
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Advice" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /systems/{systemId}/events:
+    parameters:
+      - $ref: "#/components/parameters/SystemId"
+    get:
+      tags: [data]
+      operationId: listEvents
+      description: "Scope: events:read. Inverter status/error log, newest first."
+      parameters:
+        - name: inverter
+          in: query
+          schema: { type: string, format: uuid }
+        - name: from
+          in: query
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          schema: { type: string, format: date-time }
+        - name: status
+          in: query
+          schema: { type: integer }
+        - name: errors_only
+          in: query
+          schema: { type: boolean, default: false }
+        - name: cursor
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 500, default: 100 }
+      responses:
+        "200":
+          description: Events
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EventPage" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /systems/{systemId}/export:
+    parameters:
+      - $ref: "#/components/parameters/SystemId"
+    get:
+      tags: [data]
+      operationId: exportEnergy
+      description: |
+        Scope: data:export. CSV per inverter:
+        - `day`, `month`, `year`: energy (kWh)
+        - `5min`: mean power, DC voltage and temperature per 5 minutes
+        - `minute`: the raw samples (as far as minute data is kept)
+
+        Power exports (`5min`, `minute`) cover at most 31 days.
+      parameters:
+        - name: granularity
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [day, month, year, 5min, minute]
+        - name: from
+          in: query
+          required: true
+          schema: { type: string, format: date }
+        - name: to
+          in: query
+          required: true
+          description: Exclusive end date.
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: CSV
+          content:
+            text/csv:
+              schema: { type: string, format: binary }
+        default: { $ref: "#/components/responses/Error" }
+
+  # --- members & invitations ------------------------------------------------
+  /systems/{systemId}/members:
+    parameters:
+      - $ref: "#/components/parameters/SystemId"
+    get:
+      tags: [members]
+      operationId: listMembers
+      description: "Scope: members:read"
+      responses:
+        "200":
+          description: Members
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Member" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /systems/{systemId}/members/{userId}:
+    parameters:
+      - $ref: "#/components/parameters/SystemId"
+      - name: userId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    patch:
+      tags: [members]
+      operationId: updateMember
+      description: "Scope: members:manage. Only owners can grant or revoke owner."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateMemberRequest" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Member" }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [members]
+      operationId: removeMember
+      description: "Scope: members:manage, or the member themself (leave). The last owner cannot be removed."
+      responses:
+        "204": { description: Removed }
+        default: { $ref: "#/components/responses/Error" }
+
+  /systems/{systemId}/invitations:
+    parameters:
+      - $ref: "#/components/parameters/SystemId"
+    get:
+      tags: [members]
+      operationId: listInvitations
+      description: "Scope: members:read. Pending invitations."
+      responses:
+        "200":
+          description: Invitations
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Invitation" }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      tags: [members]
+      operationId: createInvitation
+      description: "Scope: members:invite. Only owners can invite owners."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateInvitationRequest" }
+      responses:
+        "201":
+          description: Created. The token is only returned once.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CreatedInvitation" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /systems/{systemId}/invitations/{invitationId}:
+    parameters:
+      - $ref: "#/components/parameters/SystemId"
+      - name: invitationId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    delete:
+      tags: [members]
+      operationId: revokeInvitation
+      description: "Scope: members:invite"
+      responses:
+        "204": { description: Revoked }
+        default: { $ref: "#/components/responses/Error" }
+
+  /invitations/{token}:
+    parameters:
+      - name: token
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      tags: [members]
+      operationId: getInvitation
+      security: []
+      description: Public details of an invitation, so the client can show a sign-up or accept screen.
+      responses:
+        "200":
+          description: Invitation
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InvitationInfo" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /invitations/{token}/accept:
+    parameters:
+      - name: token
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      tags: [members]
+      operationId: acceptInvitation
+      description: |
+        Accept an invitation. Authenticated callers join with their account
+        (the invitation email must match). Unauthenticated callers must send
+        `name` and `password`: a Supabase account for the invited email is
+        created (email pre-confirmed by the invitation) and the client then
+        signs in with supabase-js.
+      security:
+        - bearerAuth: []
+        - {}
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AcceptInvitationRequest" }
+      responses:
+        "200":
+          description: Joined the system
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AcceptInvitationResult" }
+        default: { $ref: "#/components/responses/Error" }
+
+  # --- sharing ----------------------------------------------------------------
+  /systems/{systemId}/share-links:
+    parameters:
+      - $ref: "#/components/parameters/SystemId"
+    get:
+      tags: [sharing]
+      operationId: listShareLinks
+      description: "Scope: share:manage. Active (not revoked, not expired) public links."
+      responses:
+        "200":
+          description: Share links
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ShareLink" }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      tags: [sharing]
+      operationId: createShareLink
+      description: "Scope: share:manage. Creates a read-only public link; the token is only returned once."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateShareLinkRequest" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CreatedShareLink" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /systems/{systemId}/share-links/{shareLinkId}:
+    parameters:
+      - $ref: "#/components/parameters/SystemId"
+      - name: shareLinkId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    delete:
+      tags: [sharing]
+      operationId: revokeShareLink
+      description: "Scope: share:manage"
+      responses:
+        "204": { description: Revoked }
+        default: { $ref: "#/components/responses/Error" }
+
+  /public/{token}:
+    parameters:
+      - $ref: "#/components/parameters/ShareToken"
+    get:
+      tags: [sharing]
+      operationId: getPublicSystem
+      security: []
+      description: The shared system. Unknown, revoked and expired links are 404.
+      responses:
+        "200":
+          description: System
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PublicSystem" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /public/{token}/live:
+    parameters:
+      - $ref: "#/components/parameters/ShareToken"
+    get:
+      tags: [sharing]
+      operationId: getPublicLive
+      security: []
+      description: Current power per inverter, without status or error details.
+      responses:
+        "200":
+          description: Live values
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Live" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /public/{token}/overview:
+    parameters:
+      - $ref: "#/components/parameters/ShareToken"
+    get:
+      tags: [sharing]
+      operationId: getPublicOverview
+      security: []
+      description: >-
+        Like the system overview, without error details. Revenue is 0 unless the link
+        shows financials.
+      parameters:
+        - name: period
+          in: query
+          required: true
+          schema: { $ref: "#/components/schemas/Period" }
+        - name: date
+          in: query
+          schema: { type: string, format: date }
+        - $ref: "#/components/parameters/Compare"
+      responses:
+        "200":
+          description: Overview
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Overview" }
+        default: { $ref: "#/components/responses/Error" }
+
+  # --- waitlist ---------------------------------------------------------------
+  # Plain HTML forms of the landing page (landing_url) post here, cross-origin
+  # and without JavaScript; every answer is a 303 back to a page there. Not
+  # found when landing_url is not set.
+
+  /waitlist:
+    post:
+      tags: [waitlist]
+      operationId: joinWaitlist
+      security: []
+      description: |
+        Sign up for the waitlist. Sends the double opt-in email (at most one
+        an hour per address, and `waitlist_mails_per_hour` in total). Answers
+        the same whether the address is new, pending or confirmed. A filled
+        `website` field (honeypot) is dropped silently.
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema: { $ref: "#/components/schemas/WaitlistForm" }
+      responses:
+        "303": { $ref: "#/components/responses/LandingRedirect" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /waitlist/confirm:
+    post:
+      tags: [waitlist]
+      operationId: confirmWaitlist
+      security: []
+      description: Confirm a sign-up with the token from the email (valid 7 days).
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema: { $ref: "#/components/schemas/WaitlistTokenForm" }
+      responses:
+        "303": { $ref: "#/components/responses/LandingRedirect" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /waitlist/unsubscribe:
+    post:
+      tags: [waitlist]
+      operationId: unsubscribeWaitlist
+      security: []
+      description: |
+        Remove a sign-up. The token comes from the form or, for one-click
+        unsubscribe from mail clients (RFC 8058), from the query.
+      parameters:
+        - name: token
+          in: query
+          schema: { type: string }
+      requestBody:
+        required: false
+        content:
+          application/x-www-form-urlencoded:
+            schema: { $ref: "#/components/schemas/WaitlistTokenForm" }
+      responses:
+        "303": { $ref: "#/components/responses/LandingRedirect" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /waitlist/interest:
+    post:
+      tags: [waitlist]
+      operationId: countPlanInterest
+      security: []
+      description: Count a click on a plan's button (free, pro, installer) and go to its "coming soon" page.
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema: { $ref: "#/components/schemas/PlanInterestForm" }
+      responses:
+        "303": { $ref: "#/components/responses/LandingRedirect" }
+        default: { $ref: "#/components/responses/Error" }
+
+  # --- ingest ---------------------------------------------------------------
+  /systems/{systemId}/ingest/measurements:
+    parameters:
+      - $ref: "#/components/parameters/SystemId"
+    post:
+      tags: [ingest]
+      operationId: ingestMeasurements
+      description: "Scope: data:ingest. Idempotent per (inverter, time)."
+      security:
+        - apiKeyAuth: []
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/IngestMeasurementsRequest" }
+      responses:
+        "200":
+          description: Accepted
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IngestResult" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /systems/{systemId}/ingest/daily:
+    parameters:
+      - $ref: "#/components/parameters/SystemId"
+    post:
+      tags: [ingest]
+      operationId: ingestDaily
+      description: "Scope: data:ingest. Daily energy totals, e.g. for historical backfill."
+      security:
+        - apiKeyAuth: []
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/IngestDailyRequest" }
+      responses:
+        "200":
+          description: Accepted
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IngestResult" }
+        default: { $ref: "#/components/responses/Error" }
+
+  # --- admin ----------------------------------------------------------------
+  /systems/{systemId}/data-sources:
+    parameters:
+      - $ref: "#/components/parameters/SystemId"
+    get:
+      tags: [admin]
+      operationId: listDataSources
+      description: "Scope: datasource:manage"
+      responses:
+        "200":
+          description: Data sources
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/DataSource" }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      tags: [admin]
+      operationId: createDataSource
+      description: "Scope: datasource:manage"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DataSourceCreate" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DataSource" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /systems/{systemId}/data-sources/{dataSourceId}:
+    parameters:
+      - $ref: "#/components/parameters/SystemId"
+      - $ref: "#/components/parameters/DataSourceId"
+    patch:
+      tags: [admin]
+      operationId: updateDataSource
+      description: "Scope: datasource:manage. Omitted config fields keep their value."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DataSourceUpdate" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DataSource" }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [admin]
+      operationId: deleteDataSource
+      description: "Scope: datasource:manage"
+      responses:
+        "204": { description: Deleted }
+        default: { $ref: "#/components/responses/Error" }
+
+  /systems/{systemId}/data-sources/{dataSourceId}/run:
+    parameters:
+      - $ref: "#/components/parameters/SystemId"
+      - $ref: "#/components/parameters/DataSourceId"
+    post:
+      tags: [admin]
+      operationId: runDataSource
+      description: "Scope: datasource:manage. Runs the poller once, synchronously."
+      responses:
+        "200":
+          description: Result of the run
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DataSource" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /systems/{systemId}/data-sources/{dataSourceId}/reset-password:
+    parameters:
+      - $ref: "#/components/parameters/SystemId"
+      - $ref: "#/components/parameters/DataSourceId"
+    post:
+      tags: [admin]
+      operationId: resetDataSourcePassword
+      description: >-
+        Scope: datasource:manage. `solarlog_hosted` only: sets a new FTP password for the upload
+        account and returns it once in `upload.password`. The device must be updated.
+      responses:
+        "200":
+          description: The data source with the new password
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DataSource" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /hooks/hosted-ftp:
+    post:
+      tags: [ingest]
+      operationId: hostedFtpHook
+      security:
+        - hostedFtpHookAuth: []
+      description: >-
+        Called by noonside's FTP server (SFTPGo event rule) after each upload to a hosted FTP
+        account. Marks the account's `solarlog_hosted` source for import; unknown users are
+        ignored.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/HostedFtpEvent" }
+      responses:
+        "204": { description: Noted }
+        default: { $ref: "#/components/responses/Error" }
+
+  /systems/{systemId}/webhooks:
+    parameters:
+      - $ref: "#/components/parameters/SystemId"
+    get:
+      tags: [admin]
+      operationId: listWebhooks
+      description: "Scope: webhook:manage. The secret is never returned."
+      responses:
+        "200":
+          description: Webhooks
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Webhook" }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      tags: [admin]
+      operationId: createWebhook
+      description: >-
+        Scope: webhook:manage. The URL must be https and public. Requests are POSTs of
+        `WebhookPayload` JSON, signed with the secret if set: `X-Noonside-Signature` is "sha256="
+        and the hex HMAC-SHA256 of the raw body.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WebhookCreate" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Webhook" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /systems/{systemId}/webhooks/{webhookId}:
+    parameters:
+      - $ref: "#/components/parameters/SystemId"
+      - $ref: "#/components/parameters/WebhookId"
+    patch:
+      tags: [admin]
+      operationId: updateWebhook
+      description: "Scope: webhook:manage. Fields left out stay as they are; an empty secret removes it."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WebhookUpdate" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Webhook" }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [admin]
+      operationId: deleteWebhook
+      description: "Scope: webhook:manage. Pending deliveries are dropped."
+      responses:
+        "204": { description: Deleted }
+        default: { $ref: "#/components/responses/Error" }
+
+  /systems/{systemId}/webhooks/{webhookId}/test:
+    parameters:
+      - $ref: "#/components/parameters/SystemId"
+      - $ref: "#/components/parameters/WebhookId"
+    post:
+      tags: [admin]
+      operationId: testWebhook
+      description: "Scope: webhook:manage. Sends a `test` event now (not retried)."
+      responses:
+        "200":
+          description: Whether the receiver accepted it
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TestTargetResult" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /systems/{systemId}/webhooks/{webhookId}/deliveries:
+    parameters:
+      - $ref: "#/components/parameters/SystemId"
+      - $ref: "#/components/parameters/WebhookId"
+    get:
+      tags: [admin]
+      operationId: listWebhookDeliveries
+      description: "Scope: webhook:manage. The 20 most recent deliveries, newest first."
+      responses:
+        "200":
+          description: Deliveries
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/WebhookDelivery" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /systems/{systemId}/api-keys:
+    parameters:
+      - $ref: "#/components/parameters/SystemId"
+    get:
+      tags: [admin]
+      operationId: listAPIKeys
+      description: "Scope: apikey:manage"
+      responses:
+        "200":
+          description: API keys
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/APIKey" }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      tags: [admin]
+      operationId: createAPIKey
+      description: "Scope: apikey:manage. Keys carry data:ingest (devices), data:read (integrations) or both."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateAPIKeyRequest" }
+      responses:
+        "201":
+          description: Created. The key is only returned once.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CreatedAPIKey" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /systems/{systemId}/api-keys/{apiKeyId}:
+    parameters:
+      - $ref: "#/components/parameters/SystemId"
+      - name: apiKeyId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    delete:
+      tags: [admin]
+      operationId: revokeAPIKey
+      description: "Scope: apikey:manage"
+      responses:
+        "204": { description: Revoked }
+        default: { $ref: "#/components/responses/Error" }
+
+  # --- notifications --------------------------------------------------------
+  /me/notifications:
+    get:
+      tags: [notifications]
+      operationId: listNotifications
+      description: The caller's notifications, newest first, rendered in their locale.
+      parameters:
+        - name: unread
+          in: query
+          schema: { type: boolean, default: false }
+        - name: cursor
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+      responses:
+        "200":
+          description: Notifications
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NotificationPage" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /me/notifications/unread-count:
+    get:
+      tags: [notifications]
+      operationId: getUnreadNotificationCount
+      responses:
+        "200":
+          description: Number of unread notifications
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UnreadCount" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /me/notifications/read:
+    post:
+      tags: [notifications]
+      operationId: markNotificationsRead
+      description: Marks the given notifications, or all with `all`, read.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MarkNotificationsReadRequest" }
+      responses:
+        "200":
+          description: Unread count afterwards
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UnreadCount" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /me/notifications/delete:
+    post:
+      tags: [notifications]
+      operationId: deleteNotifications
+      description: Deletes the given notifications, or all read ones with `read`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DeleteNotificationsRequest" }
+      responses:
+        "200":
+          description: Unread count afterwards
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UnreadCount" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /me/notification-preferences:
+    get:
+      tags: [notifications]
+      operationId: getNotificationPreferences
+      responses:
+        "200":
+          description: Preferences
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NotificationPreferences" }
+        default: { $ref: "#/components/responses/Error" }
+    put:
+      tags: [notifications]
+      operationId: setNotificationPreferences
+      description: Replaces the default and the per-system overrides (only systems the caller is a member of).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/NotificationPreferencesUpdate" }
+      responses:
+        "200":
+          description: Saved preferences
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NotificationPreferences" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /me/push-subscriptions:
+    put:
+      tags: [notifications]
+      operationId: savePushSubscription
+      description: Registers this device's Web Push subscription (upsert by endpoint).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PushSubscriptionRequest" }
+      responses:
+        "204": { description: Saved }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [notifications]
+      operationId: deletePushSubscription
+      parameters:
+        - name: endpoint
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        "204": { description: Deleted }
+        default: { $ref: "#/components/responses/Error" }
+
+  /me/push-subscriptions/test:
+    post:
+      tags: [notifications]
+      operationId: sendTestPush
+      description: Sends a test push to all of the caller's devices.
+      responses:
+        "200":
+          description: Devices that received it
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TestPushResult" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /me/notification-targets:
+    get:
+      tags: [notifications]
+      operationId: getNotificationTargets
+      description: The caller's ntfy topic and webhook. The token and secret are never returned.
+      responses:
+        "200":
+          description: Targets
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NotificationTargets" }
+        default: { $ref: "#/components/responses/Error" }
+    put:
+      tags: [notifications]
+      operationId: setNotificationTargets
+      description: >-
+        Updates the caller's targets. Fields left out stay as they are; an empty URL removes the
+        target with its token or secret, an empty token or secret removes it. URLs must be https
+        and point to a public address.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/NotificationTargetsUpdate" }
+      responses:
+        "200":
+          description: Saved targets
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NotificationTargets" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /me/notification-targets/test:
+    post:
+      tags: [notifications]
+      operationId: sendTestToTarget
+      description: Sends a test notification to the caller's ntfy topic or webhook now.
+      parameters:
+        - name: channel
+          in: query
+          required: true
+          schema: { type: string, enum: [ntfy, webhook] }
+      responses:
+        "200":
+          description: Whether the target accepted it
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TestTargetResult" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /push/config:
+    get:
+      tags: [notifications]
+      operationId: getPushConfig
+      description: Whether the server sends Web Push, and its VAPID public key.
+      responses:
+        "200":
+          description: Push configuration
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PushConfig" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /systems/{systemId}/alerts:
+    parameters:
+      - $ref: "#/components/parameters/SystemId"
+    get:
+      tags: [notifications]
+      operationId: listAlerts
+      description: "Scope: events:read. Alerts opened by the alert engine, newest first."
+      parameters:
+        - name: state
+          in: query
+          schema:
+            type: string
+            enum: [open, all]
+            default: open
+        - name: cursor
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+      responses:
+        "200":
+          description: Alerts
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AlertPage" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /systems/{systemId}/alerts/{alertId}/ack:
+    parameters:
+      - $ref: "#/components/parameters/SystemId"
+      - $ref: "#/components/parameters/AlertId"
+    post:
+      tags: [notifications]
+      operationId: ackAlert
+      description: "Scope: alerts:manage. Acknowledges the alert; no more reminders."
+      responses:
+        "200":
+          description: Alert
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Alert" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /systems/{systemId}/alerts/{alertId}/snooze:
+    parameters:
+      - $ref: "#/components/parameters/SystemId"
+      - $ref: "#/components/parameters/AlertId"
+    post:
+      tags: [notifications]
+      operationId: snoozeAlert
+      description: "Scope: alerts:manage. No notifications but the resolution until `until` (null ends the snooze)."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SnoozeAlertRequest" }
+      responses:
+        "200":
+          description: Alert
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Alert" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /systems/{systemId}/alert-rules:
+    parameters:
+      - $ref: "#/components/parameters/SystemId"
+    get:
+      tags: [notifications]
+      operationId: listAlertRules
+      description: "Scope: alerts:manage. Every built-in rule with the system's settings."
+      responses:
+        "200":
+          description: Rules
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AlertRule" }
+        default: { $ref: "#/components/responses/Error" }
+    put:
+      tags: [notifications]
+      operationId: setAlertRules
+      description: "Scope: alerts:manage. Replaces the system's rule settings; rules left out use the defaults."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              maxItems: 50
+              items: { $ref: "#/components/schemas/AlertRuleUpdate" }
+      responses:
+        "200":
+          description: Rules
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AlertRule" }
+        default: { $ref: "#/components/responses/Error" }
+
+  # --- superadmin -----------------------------------------------------------
+  /admin/systems:
+    get:
+      tags: [admin]
+      operationId: listAdminSystems
+      description: Superadmin only. All systems with their inverter and member counts and owners, in one request.
+      responses:
+        "200":
+          description: Systems
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AdminSystem" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /admin/users:
+    get:
+      tags: [admin]
+      operationId: listUsers
+      description: Superadmin only. All accounts with their system roles.
+      responses:
+        "200":
+          description: Users
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AdminUser" }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      tags: [admin]
+      operationId: createUser
+      description: |
+        Superadmin only. Creates a confirmed account (like `noonside user create`).
+        To let people choose their own password, invite them to a system instead.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateUserRequest" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminUser" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /admin/users/{userId}:
+    parameters:
+      - name: userId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [admin]
+      operationId: getUser
+      description: Superadmin only.
+      responses:
+        "200":
+          description: User
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminUser" }
+        default: { $ref: "#/components/responses/Error" }
+    patch:
+      tags: [admin]
+      operationId: updateUser
+      description: |
+        Superadmin only. Changes the name or email (kept confirmed), grants or
+        revokes superadmin, or disables the account (no sign-in). Superadmin
+        and disabled apply to the user's next access token. You cannot revoke
+        your own superadmin flag or disable yourself.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateUserRequest" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminUser" }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [admin]
+      operationId: deleteUser
+      description: |
+        Superadmin only. Deletes the account with its memberships and settings.
+        Refused (409) while the user is the only owner of a system, and for
+        yourself.
+      responses:
+        "204": { description: Deleted }
+        default: { $ref: "#/components/responses/Error" }
+
+  /admin/users/{userId}/password-reset:
+    parameters:
+      - name: userId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      tags: [admin]
+      operationId: sendUserPasswordReset
+      description: Superadmin only. Emails the user a link to choose a new password.
+      responses:
+        "204": { description: Sent }
+        default: { $ref: "#/components/responses/Error" }
+
+  /admin/users/{userId}/avatar:
+    parameters:
+      - name: userId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    put:
+      tags: [admin]
+      operationId: uploadUserAvatar
+      description: Superadmin only. Sets the user's profile picture.
+      requestBody:
+        required: true
+        description: JPEG, PNG or WebP, at most 2 MB and 4096×4096 px.
+        content:
+          application/octet-stream:
+            schema: { type: string, format: binary }
+      responses:
+        "200":
+          description: User
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminUser" }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [admin]
+      operationId: deleteUserAvatar
+      description: Superadmin only.
+      responses:
+        "200":
+          description: User
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminUser" }
+        default: { $ref: "#/components/responses/Error" }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+    hostedFtpHookAuth:
+      type: http
+      scheme: bearer
+      description: >-
+        The FTP server's token for the upload hook: hex HMAC-SHA256 of "hosted-ftp-hook" keyed
+        with the server's SECRET_KEY.
+
+  parameters:
+    SystemId:
+      name: systemId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    InverterId:
+      name: inverterId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    DataSourceId:
+      name: dataSourceId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    AlertId:
+      name: alertId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    WebhookId:
+      name: webhookId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    ShareToken:
+      name: token
+      in: path
+      required: true
+      schema: { type: string }
+    Compare:
+      name: compare
+      in: query
+      description: >-
+        Month and year views: also return the same buckets of the previous year or of all
+        earlier years with data (`comparison`).
+      schema:
+        type: string
+        enum: [previous_year, all_years]
+
+  schemas:
+    WaitlistForm:
+      type: object
+      description: All fields are optional for the decoder; the handler validates them and redirects on errors.
+      properties:
+        email: { type: string }
+        role: { type: string, description: "operator, home_assistant, installer or other" }
+        plan: { type: string, description: "free, pro or installer when coming from a pricing button" }
+        consent: { type: string, description: "Checkbox; any value means given" }
+        website: { type: string, description: Honeypot, must stay empty }
+    WaitlistTokenForm:
+      type: object
+      properties:
+        token: { type: string }
+    PlanInterestForm:
+      type: object
+      properties:
+        plan: { type: string }
+    Error:
+      type: object
+      properties:
+        message:
+          type: string
+      required: [message]
+
+    Role:
+      type: string
+      enum: [owner, admin, viewer]
+
+    Period:
+      type: string
+      enum: [day, month, year, total]
+
+    Locale:
+      type: string
+      enum: [en, de]
+
+    Me:
+      type: object
+      required: [id, email, name, locale, is_superadmin, systems, features]
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string }
+        name: { type: string }
+        avatar_url: { type: string, description: "Profile picture (same origin, immutable); missing without one" }
+        locale: { $ref: "#/components/schemas/Locale" }
+        is_superadmin: { type: boolean }
+        systems:
+          type: array
+          items: { $ref: "#/components/schemas/SystemMembership" }
+        features: { $ref: "#/components/schemas/Features" }
+
+    Features:
+      type: object
+      description: Optional server features.
+      required: [hosted_ftp, uploads]
+      properties:
+        hosted_ftp: { type: boolean, description: "`solarlog_hosted` data sources can be created" }
+        uploads: { type: boolean, description: Profile and system pictures can be uploaded }
+
+    SystemMembership:
+      type: object
+      required: [system_id, name, role, scopes]
+      properties:
+        system_id: { type: string, format: uuid }
+        name: { type: string }
+        image_url: { type: string, description: The system's picture; missing without one }
+        role: { $ref: "#/components/schemas/Role" }
+        scopes:
+          type: array
+          items: { type: string }
+
+    UpdateMeRequest:
+      type: object
+      properties:
+        name: { type: string, minLength: 1, maxLength: 200 }
+        locale:
+          $ref: "#/components/schemas/Locale"
+          description: Language of emails and push notifications.
+
+    System:
+      type: object
+      required: [id, name, location, timezone, peak_power_kwp, orientation, planes, module_info, operator,
+        tariff_per_kwh, currency, co2_kg_per_kwh, unpaid_at_negative_prices, role, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        image_url: { type: string, description: "Picture (same origin, immutable); missing without one" }
+        location: { type: string, description: Address }
+        latitude: { type: number, description: From the address unless set explicitly }
+        longitude: { type: number }
+        timezone: { type: string, example: Europe/Berlin }
+        peak_power_kwp: { type: number }
+        commissioned_at: { type: string, format: date }
+        orientation: { type: string }
+        planes:
+          type: array
+          description: Module fields for the weather-based expected power and PVGIS targets; none means horizontal panels.
+          items: { $ref: "#/components/schemas/Plane" }
+        module_info: { type: string }
+        operator: { type: string }
+        tariff_per_kwh: { type: number, description: Feed-in tariff per kWh in `currency` }
+        currency: { type: string, example: EUR }
+        co2_kg_per_kwh: { type: number, description: Avoided CO2 per kWh }
+        minute_retention_years:
+          type: [integer, "null"]
+          description: >-
+            Minute data is kept for the current year plus this many full calendar years (system
+            time zone); older minute data is deleted and not imported. Missing or null keeps
+            everything. Daily energy is always kept.
+        price_zone:
+          type: [string, "null"]
+          enum: [DE-LU, AT, null]
+          description: Bidding zone for day-ahead prices (price band, negative-price hours, cheapest window); null for none.
+        unpaid_at_negative_prices:
+          type: boolean
+          description: >-
+            No feed-in payment while the day-ahead price is negative (§ 51 EEG; systems commissioned
+            from 25 Feb 2025 under the Solarspitzengesetz). Revenue leaves out the energy fed in
+            during those intervals.
+        role: { $ref: "#/components/schemas/Role" }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    SystemCreate:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 200 }
+        location:
+          type: string
+          maxLength: 300
+          description: >-
+            Address. When it changes and latitude/longitude are not given, it is geocoded; an
+            address that cannot be found is rejected (400). An empty address clears the coordinates.
+        latitude: { type: number, minimum: -90, maximum: 90 }
+        longitude: { type: number, minimum: -180, maximum: 180 }
+        timezone: { type: string }
+        peak_power_kwp: { type: number, minimum: 0 }
+        commissioned_at: { type: string, format: date }
+        orientation: { type: string }
+        planes:
+          type: array
+          maxItems: 10
+          description: Replaces the planes when given; an empty array removes them.
+          items: { $ref: "#/components/schemas/Plane" }
+        module_info: { type: string }
+        operator: { type: string }
+        tariff_per_kwh: { type: number, minimum: 0 }
+        currency: { type: string, minLength: 3, maxLength: 3 }
+        co2_kg_per_kwh: { type: number, minimum: 0 }
+        minute_retention_years: { type: [integer, "null"], minimum: 0, maximum: 100, description: "null keeps all minute data" }
+        price_zone: { type: [string, "null"], enum: [DE-LU, AT, null], description: "null: no day-ahead prices" }
+        unpaid_at_negative_prices: { type: boolean }
+
+    SystemUpdate:
+      type: object
+      properties:
+        name: { type: string, minLength: 1, maxLength: 200 }
+        location:
+          type: string
+          maxLength: 300
+          description: >-
+            Address. When it changes and latitude/longitude are not given, it is geocoded; an
+            address that cannot be found is rejected (400). An empty address clears the coordinates.
+        latitude: { type: number, minimum: -90, maximum: 90 }
+        longitude: { type: number, minimum: -180, maximum: 180 }
+        timezone: { type: string }
+        peak_power_kwp: { type: number, minimum: 0 }
+        commissioned_at: { type: string, format: date }
+        orientation: { type: string }
+        planes:
+          type: array
+          maxItems: 10
+          description: Replaces the planes when given; an empty array removes them.
+          items: { $ref: "#/components/schemas/Plane" }
+        module_info: { type: string }
+        operator: { type: string }
+        tariff_per_kwh: { type: number, minimum: 0 }
+        currency: { type: string, minLength: 3, maxLength: 3 }
+        co2_kg_per_kwh: { type: number, minimum: 0 }
+        minute_retention_years: { type: [integer, "null"], minimum: 0, maximum: 100, description: "null keeps all minute data" }
+        price_zone: { type: [string, "null"], enum: [DE-LU, AT, null], description: "null: no day-ahead prices" }
+        unpaid_at_negative_prices: { type: boolean }
+
+    Plane:
+      type: object
+      required: [kwp, tilt_deg, azimuth_deg]
+      properties:
+        id: { type: string, format: uuid, description: "Set by the server; send it back to keep the plane (and its inverters) when saving the planes" }
+        name: { type: string, maxLength: 100, description: "e.g. \"East roof\"" }
+        kwp: { type: number, minimum: 0, description: Peak power of the plane's modules }
+        tilt_deg: { type: number, minimum: 0, maximum: 90, description: "0 = horizontal" }
+        azimuth_deg: { type: number, minimum: -180, maximum: 180, description: "0 = south, -90 = east, 90 = west" }
+
+    MonthlyTargets:
+      type: object
+      required: [target_kwh]
+      properties:
+        target_kwh:
+          description: Expected yield for January..December.
+          type: array
+          minItems: 12
+          maxItems: 12
+          items: { type: number, minimum: 0 }
+
+    Inverter:
+      type: object
+      required: [id, external_ref, name, model, serial_number, peak_power_kwp, color, sort_order]
+      properties:
+        id: { type: string, format: uuid }
+        external_ref: { type: string, description: Identifier used by the data source, e.g. "1" for WR 1 }
+        name: { type: string }
+        model: { type: string }
+        serial_number: { type: string }
+        peak_power_kwp: { type: number }
+        max_ac_power_w: { type: number, description: Rated AC power in W, for the clipping alert }
+        color: { type: string, description: Chart color as hex, e.g. "#ff0000" }
+        sort_order: { type: integer }
+        plane_id: { type: string, format: uuid, description: Module plane the inverter's modules are on }
+
+    InverterCreate:
+      type: object
+      required: [external_ref, name]
+      properties:
+        external_ref: { type: string, minLength: 1, maxLength: 100 }
+        name: { type: string, minLength: 1, maxLength: 200 }
+        model: { type: string }
+        serial_number: { type: string }
+        peak_power_kwp: { type: number, minimum: 0 }
+        max_ac_power_w: { type: [number, "null"], minimum: 1, description: "Rated AC power in W; null clears it" }
+        color: { type: string }
+        sort_order: { type: integer }
+        plane_id: { type: [string, "null"], format: uuid, description: "Module plane of the system; null clears it" }
+
+    InverterUpdate:
+      type: object
+      properties:
+        external_ref: { type: string, minLength: 1, maxLength: 100 }
+        name: { type: string, minLength: 1, maxLength: 200 }
+        model: { type: string }
+        serial_number: { type: string }
+        peak_power_kwp: { type: number, minimum: 0 }
+        max_ac_power_w: { type: [number, "null"], minimum: 1, description: "Rated AC power in W; null clears it" }
+        color: { type: string }
+        sort_order: { type: integer }
+        plane_id: { type: [string, "null"], format: uuid, description: "Module plane of the system; null clears it" }
+
+    GeocodeResult:
+      type: object
+      required: [available, places]
+      properties:
+        available: { type: boolean, description: False when geocoding is disabled or the service failed }
+        places:
+          type: array
+          items: { $ref: "#/components/schemas/Place" }
+
+    Place:
+      type: object
+      required: [label, latitude, longitude, kind]
+      properties:
+        label: { type: string, example: "Hauptstraße 1, 86199 Augsburg, Deutschland" }
+        latitude: { type: number }
+        longitude: { type: number }
+        kind:
+          type: string
+          description: Precision of the match
+          enum: [house, street, locality, district, city, county, state, country, other]
+        country_code: { type: string, example: DE }
+
+    Weather:
+      type: object
+      required: [available, oriented, hourly, days]
+      properties:
+        available: { type: boolean }
+        oriented: { type: boolean, description: "Tilt and azimuth are set (otherwise the expected power assumes horizontal panels)" }
+        source: { type: string, example: Open-Meteo }
+        current: { $ref: "#/components/schemas/WeatherCurrent" }
+        hourly:
+          description: Hourly forecast from the current hour on.
+          type: array
+          items: { $ref: "#/components/schemas/WeatherHour" }
+        days:
+          description: Today and the following days (system time zone).
+          type: array
+          items: { $ref: "#/components/schemas/WeatherDay" }
+
+    ExpectedPoint:
+      type: object
+      required: [time, w]
+      properties:
+        time: { type: string, format: date-time }
+        w: { type: number }
+
+    WeatherCurrent:
+      type: object
+      required: [time, temperature_c, weather_code, cloud_cover_pct, is_day]
+      properties:
+        time: { type: string, format: date-time }
+        temperature_c: { type: number }
+        weather_code: { type: integer, description: WMO weather interpretation code }
+        cloud_cover_pct: { type: number }
+        is_day: { type: boolean }
+        expected_w: { type: number, description: Expected power now }
+
+    WeatherHour:
+      type: object
+      required: [time, temperature_c, weather_code, cloud_cover_pct, precipitation_probability_pct, is_day]
+      properties:
+        time: { type: string, format: date-time }
+        temperature_c: { type: number }
+        weather_code: { type: integer }
+        cloud_cover_pct: { type: number }
+        precipitation_probability_pct: { type: number }
+        is_day: { type: boolean, description: Between sunrise and sunset }
+
+    WeatherDay:
+      type: object
+      required: [date, weather_code, temp_min_c, temp_max_c, sunshine_h, expected_kwh]
+      properties:
+        date: { type: string, format: date }
+        weather_code: { type: integer }
+        temp_min_c: { type: number }
+        temp_max_c: { type: number }
+        sunrise: { type: string, format: date-time }
+        sunset: { type: string, format: date-time }
+        sunshine_h: { type: number }
+        expected_kwh: { type: number }
+
+    Live:
+      type: object
+      required: [pac_w, pdc_w, inverters, stale]
+      properties:
+        time: { type: string, format: date-time, description: Most recent reading }
+        stale:
+          type: boolean
+          description: >-
+            The newest reading is older than 30 minutes (or two poll intervals of the fastest
+            enabled data source) while the sun is up.
+        pac_w: { type: number }
+        pdc_w: { type: number }
+        efficiency_pct: { type: number }
+        today_kwh: { type: number }
+        inverters:
+          type: array
+          items: { $ref: "#/components/schemas/LiveInverter" }
+
+    LiveInverter:
+      type: object
+      required: [inverter_id, name, online, status_text, error_text]
+      properties:
+        inverter_id: { type: string, format: uuid }
+        name: { type: string }
+        time: { type: string, format: date-time }
+        online: { type: boolean, description: Reported within the last 15 minutes }
+        pac_w: { type: number }
+        pdc_w: { type: number }
+        efficiency_pct: { type: number }
+        status_code: { type: integer }
+        status_text: { type: string }
+        error_code: { type: integer }
+        error_text: { type: string }
+        power_limit_pct: { type: integer, description: Active power limit the device reported (curtailment) }
+
+    Overview:
+      type: object
+      required: [period, date, first_date, range_start, range_end, prev_date, unit, timestamps, total, series, summary, inverters]
+      properties:
+        period: { $ref: "#/components/schemas/Period" }
+        date: { type: string, format: date }
+        first_date: { type: string, format: date, description: Earliest day with data or the commissioning date, whichever is earlier (today if neither) }
+        range_start: { type: string, format: date-time }
+        range_end: { type: string, format: date-time }
+        prev_date: { type: string, format: date, description: A date in the previous period }
+        next_date: { type: string, format: date, description: A date in the next period, absent for the current one }
+        unit: { type: string, enum: [W, kWh] }
+        timestamps:
+          description: Start of each bucket; series values align with this array.
+          type: array
+          items: { type: string, format: date-time }
+        total:
+          type: array
+          items: { type: number }
+        target:
+          description: >-
+            Expected energy per bucket (month/year/total only): from the weather where known,
+            otherwise from the monthly targets (see summary.target_source).
+          type: array
+          items: { type: number }
+        performance_ratio:
+          description: >-
+            Performance ratio in % per bucket (month/year/total only): energy of the complete
+            past days with weather data ÷ (irradiation on the panel planes × kWp); null without them.
+          type: array
+          items: { type: [number, "null"] }
+        expected:
+          description: >-
+            Weather-based expected power of the shown inverters (day only), as mean values at
+            the middle of each 15-minute (before 2022: hourly) interval.
+          type: array
+          items: { $ref: "#/components/schemas/ExpectedPoint" }
+        prices:
+          description: >-
+            Day only, with a price zone: the day's day-ahead prices (hourly before October 2025,
+            then 15 minutes).
+          type: array
+          items: { $ref: "#/components/schemas/PricePoint" }
+        prices_source: { type: string, description: Provider of the prices, for attribution }
+        corrected:
+          description: Month/year/total only; per bucket, whether it contains manually corrected days.
+          type: array
+          items: { type: boolean }
+        series:
+          type: array
+          items: { $ref: "#/components/schemas/InverterSeries" }
+        comparison:
+          description: >-
+            With `compare` (month and year only): energy (kWh) of the shown inverters in the same
+            buckets of earlier years, newest first. A month's days align by day of the month;
+            null where the day does not exist or lies before the first data.
+          type: array
+          items: { $ref: "#/components/schemas/ComparisonSeries" }
+        summary: { $ref: "#/components/schemas/OverviewSummary" }
+        inverters:
+          type: array
+          items: { $ref: "#/components/schemas/InverterSummary" }
+
+    InverterSeries:
+      type: object
+      required: [inverter_id, values]
+      properties:
+        inverter_id: { type: string, format: uuid }
+        values:
+          type: array
+          items: { type: number }
+        udc_v:
+          description: Day only, if measured. Mean DC voltage per bucket; null without a reading.
+          type: array
+          items: { type: [number, "null"] }
+        temperature_c:
+          description: Day only, if measured. Mean inverter temperature per bucket; null without a reading.
+          type: array
+          items: { type: [number, "null"] }
+
+    ComparisonSeries:
+      type: object
+      required: [year, total_kwh, values]
+      properties:
+        year: { type: integer }
+        total_kwh: { type: number, description: Sum of the values }
+        values:
+          type: array
+          items: { type: [number, "null"] }
+
+    DailyEnergy:
+      type: object
+      required: [days]
+      properties:
+        days:
+          type: array
+          items: { $ref: "#/components/schemas/DayEnergy" }
+
+    DayEnergy:
+      type: object
+      required: [date, energy_kwh]
+      properties:
+        date: { type: string, format: date }
+        energy_kwh: { type: number }
+
+    DayEnergyDetail:
+      type: object
+      required: [date, inverters]
+      properties:
+        date: { type: string, format: date }
+        inverters:
+          type: array
+          items: { $ref: "#/components/schemas/DayEnergyInverter" }
+
+    DayEnergyInverter:
+      type: object
+      required: [inverter_id, device_kwh, manual_kwh, manual_at]
+      properties:
+        inverter_id: { type: string, format: uuid }
+        device_kwh: { type: [number, "null"], description: What the device reported; null without data }
+        manual_kwh: { type: [number, "null"], description: The manual correction; null without one }
+        manual_at: { type: [string, "null"], format: date-time }
+
+    DayEnergyUpdate:
+      type: object
+      required: [inverters]
+      properties:
+        inverters:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items: { $ref: "#/components/schemas/DayEnergyUpdateItem" }
+
+    DayEnergyUpdateItem:
+      type: object
+      required: [inverter_id, energy_kwh]
+      properties:
+        inverter_id: { type: string, format: uuid }
+        energy_kwh: { type: [number, "null"], minimum: 0, description: The corrected energy; null removes the correction }
+
+    OverviewSummary:
+      type: object
+      required: [energy_kwh, revenue, currency, co2_avoided_kg, lifetime_energy_kwh, lifetime_co2_avoided_kg]
+      properties:
+        energy_kwh: { type: number }
+        revenue: { type: number }
+        currency: { type: string }
+        specific_yield_kwh_kwp: { type: number }
+        max_value: { type: number, description: Peak power (day) or best bucket energy }
+        max_at: { type: string, format: date-time }
+        target_kwh: { type: number, description: Expected energy for the whole period }
+        target_to_date_kwh: { type: number, description: Expected energy until now }
+        actual_pct: { type: number, description: energy / target_to_date }
+        target_source:
+          type: string
+          enum: [weather, targets]
+          description: "weather: at least partly from the weather (Open-Meteo); targets: only the monthly targets"
+
+        irradiation_kwh_m2:
+          type: number
+          description: >-
+            Irradiation on the panel planes (kWp-weighted) of the days the performance ratio covers:
+            until now for today, otherwise the complete past days with weather data.
+        performance_ratio_pct:
+          type: number
+          description: Energy ÷ (irradiation × kWp) over the same days; missing without weather data.
+        performance_ratio_trend_pct:
+          type: number
+          description: >-
+            Total view only: change of the yearly performance ratio in percentage points per year
+            (least squares over complete years, at least three), a sign of degradation.
+        negative_price_kwh:
+          type: number
+          description: >-
+            With a price zone: energy produced while the day-ahead price was negative (from minute
+            data; without meters all of it counts as fed in). Missing without prices.
+        negative_price_hours: { type: number, description: Hours with a negative price in the period }
+        unpaid_revenue:
+          type: number
+          description: >-
+            With unpaid_at_negative_prices: revenue not paid for negative_price_kwh; `revenue`
+            already leaves it out.
+        corrected: { type: boolean, description: The period's energy contains manually corrected days }
+        co2_avoided_kg: { type: number }
+        lifetime_energy_kwh: { type: number }
+        lifetime_co2_avoided_kg: { type: number }
+
+    InverterSummary:
+      type: object
+      required: [inverter_id, name, color, peak_power_kwp, energy_kwh, share_pct, status_text]
+      properties:
+        inverter_id: { type: string, format: uuid }
+        name: { type: string }
+        color: { type: string }
+        peak_power_kwp: { type: number }
+        energy_kwh: { type: number }
+        specific_yield_kwh_kwp: { type: number }
+        max_pac_w: { type: number }
+        share_pct: { type: number }
+        dc_energy_kwh: { type: number, description: DC energy (day only, from minute data) }
+        efficiency_pct: { type: number, description: AC / DC energy (day only, from minute data) }
+        status_text: { type: string }
+        error_text: { type: string }
+
+    Dashboard:
+      type: object
+      required: [systems]
+      properties:
+        systems:
+          type: array
+          items: { $ref: "#/components/schemas/DashboardSystem" }
+
+    DashboardSystem:
+      type: object
+      required: [system_id, name, role, peak_power_kwp, pac_w, today_kwh, month_kwh, year_kwh,
+        lifetime_kwh, inverters_total, inverters_online, inverters_with_error, open_alerts, stale]
+      properties:
+        system_id: { type: string, format: uuid }
+        name: { type: string }
+        image_url: { type: string }
+        role: { $ref: "#/components/schemas/Role" }
+        peak_power_kwp: { type: number }
+        last_update: { type: string, format: date-time }
+        stale:
+          type: boolean
+          description: >-
+            The newest reading is older than 30 minutes (or two poll intervals of the fastest
+            enabled data source) while the sun is up.
+        pac_w: { type: number }
+        today_kwh: { type: number }
+        month_kwh: { type: number }
+        month_target_to_date_kwh: { type: number }
+        month_performance_ratio_pct:
+          type: number
+          description: Performance ratio of this month's complete past days with weather data.
+        year_kwh: { type: number }
+        year_target_to_date_kwh: { type: number }
+        open_alerts: { type: integer, description: Open alerts (not snoozed) }
+        lifetime_kwh: { type: number }
+        inverters_total: { type: integer }
+        inverters_online: { type: integer }
+        inverters_with_error: { type: integer }
+
+    Event:
+      type: object
+      required: [id, inverter_id, started_at, status_text, error_text]
+      properties:
+        id: { type: integer, format: int64 }
+        inverter_id: { type: string, format: uuid }
+        started_at: { type: string, format: date-time }
+        ended_at: { type: string, format: date-time }
+        status_code: { type: integer }
+        status_text: { type: string }
+        error_code: { type: integer }
+        error_text: { type: string }
+        power_limit_pct:
+          type: integer
+          description: Active power limit in % the device reported (e.g. § 14a EnWG or feed-in management)
+
+    EventPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Event" }
+        next_cursor: { type: string }
+
+    Member:
+      type: object
+      required: [user_id, email, name, role, created_at]
+      properties:
+        user_id: { type: string, format: uuid }
+        email: { type: string }
+        name: { type: string }
+        avatar_url: { type: string }
+        role: { $ref: "#/components/schemas/Role" }
+        created_at: { type: string, format: date-time }
+
+    UpdateMemberRequest:
+      type: object
+      required: [role]
+      properties:
+        role: { $ref: "#/components/schemas/Role" }
+
+    Invitation:
+      type: object
+      required: [id, email, role, created_at, expires_at]
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string }
+        role: { $ref: "#/components/schemas/Role" }
+        created_at: { type: string, format: date-time }
+        expires_at: { type: string, format: date-time }
+
+    CreateInvitationRequest:
+      type: object
+      required: [email, role]
+      properties:
+        email: { type: string, format: email }
+        role: { $ref: "#/components/schemas/Role" }
+
+    CreatedInvitation:
+      type: object
+      required: [invitation, email_sent]
+      properties:
+        invitation: { $ref: "#/components/schemas/Invitation" }
+        token:
+          type: string
+          description: Only if the email was not sent and the caller is a superadmin.
+        accept_url:
+          type: string
+          description: |
+            Only if the email was not sent and the caller is a superadmin, who
+            then shares it manually. Opening the link creates an account for the
+            invited address, so everyone else only gets it by email.
+        email_sent:
+          type: boolean
+          description: Whether the invitation was emailed.
+
+    InvitationInfo:
+      type: object
+      required: [system_name, email, role, expires_at, user_exists]
+      properties:
+        system_name: { type: string }
+        email: { type: string }
+        role: { $ref: "#/components/schemas/Role" }
+        expires_at: { type: string, format: date-time }
+        user_exists: { type: boolean }
+
+    AcceptInvitationResult:
+      type: object
+      required: [system_id, role, account_created]
+      properties:
+        system_id: { type: string, format: uuid }
+        role: { $ref: "#/components/schemas/Role" }
+        account_created:
+          type: boolean
+          description: A new account was created; sign in with the invited email and the chosen password.
+
+    AcceptInvitationRequest:
+      type: object
+      properties:
+        name: { type: string, minLength: 1, maxLength: 200 }
+        password: { type: string, minLength: 10, maxLength: 200 }
+
+    IngestMeasurementsRequest:
+      type: object
+      required: [measurements]
+      properties:
+        create_inverters:
+          type: boolean
+          default: false
+          description: Create inverters for unknown refs instead of rejecting the batch.
+        measurements:
+          type: array
+          minItems: 1
+          maxItems: 10000
+          items: { $ref: "#/components/schemas/MeasurementInput" }
+
+    MeasurementInput:
+      type: object
+      required: [inverter, time]
+      properties:
+        inverter: { type: string, description: Inverter external_ref }
+        time: { type: string, format: date-time }
+        pac_w: { type: number }
+        pdc_w: { type: number }
+        udc_v: { type: number }
+        eday_wh: { type: number, description: Energy since local midnight }
+        temperature_c: { type: number }
+        status_code: { type: integer }
+        status_text: { type: string }
+        error_code: { type: integer }
+        error_text: { type: string }
+        power_limit_pct:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: >-
+            Active power limit in % of the rated power, if the device reports curtailment (grid
+            operator control under § 14a EnWG, feed-in management); 100 means no limit. A change
+            is logged as an event.
+
+    IngestDailyRequest:
+      type: object
+      required: [days]
+      properties:
+        create_inverters: { type: boolean, default: false }
+        days:
+          type: array
+          minItems: 1
+          maxItems: 50000
+          items:
+            type: object
+            required: [inverter, date, energy_wh]
+            properties:
+              inverter: { type: string }
+              date: { type: string, format: date }
+              energy_wh: { type: number, minimum: 0 }
+              pac_max_w: { type: number, minimum: 0 }
+
+    IngestResult:
+      type: object
+      required: [accepted, rejected, inverters_created]
+      properties:
+        accepted: { type: integer, description: "Points or days stored." }
+        rejected:
+          type: integer
+          description: >-
+            Implausible values dropped: points more than 10 minutes in the future,
+            negative power, power above 1.3 × the rated power, energy above 12 kWh per kWp.
+            A point with a dropped field is still stored with its other values.
+        inverters_created: { type: integer }
+
+    DataSourceKind:
+      type: string
+      enum: [solarlog_remote, solarlog_hosted, pvoutput_export]
+      description: >-
+        `pvoutput_export` pushes instead of pulling: every run uploads new 5-minute status
+        (power and energy of the day) and the daily output of finished days to PVOutput.
+        `solarlog_hosted` creates an FTP account on noonside's own FTP server (SFTPGo) that the
+        Solar-Log uploads its export to (see `upload`); it takes no config and needs
+        `features.hosted_ftp`. It is imported after each upload, not on `poll_interval_s`.
+
+    SolarLogProtocol:
+      type: string
+      enum: [ftp, ftps, sftp]
+      description: How a `solarlog_remote` source reaches the server. `ftps` is explicit TLS on the FTP port.
+
+    DataSourceConfig:
+      type: object
+      description: >-
+        Solar-Log HTTP/FTP export: `solarlog_remote` uses the connection fields; `host_key` is
+        SFTP only. `solarlog_hosted` only takes `backfill_history`. `pvoutput_export` uses
+        `pvoutput_system_id` and `api_key`.
+      properties:
+        protocol: { $ref: "#/components/schemas/SolarLogProtocol" }
+        host: { type: string }
+        port: { type: integer, minimum: 1, maximum: 65535 }
+        username: { type: string }
+        password: { type: string, writeOnly: true }
+        has_password: { type: boolean, readOnly: true }
+        directory: { type: string }
+        host_key:
+          type: string
+          description: SFTP server public key(s), one per line in authorized_keys or known_hosts (ssh-keyscan) format
+        backfill_history: { type: boolean, description: Import days_hist/months/years on each run }
+        pvoutput_system_id: { type: string, maxLength: 20, description: PVOutput system ID (sid) }
+        api_key: { type: string, writeOnly: true, maxLength: 100, description: PVOutput API key (write access) }
+        has_api_key: { type: boolean, readOnly: true }
+
+    DataSource:
+      type: object
+      required: [id, kind, name, enabled, poll_interval_s, config, last_error]
+      properties:
+        id: { type: string, format: uuid }
+        kind: { $ref: "#/components/schemas/DataSourceKind" }
+        name: { type: string }
+        enabled: { type: boolean }
+        poll_interval_s: { type: integer }
+        config: { $ref: "#/components/schemas/DataSourceConfig" }
+        last_run_at: { type: string, format: date-time }
+        last_success_at: { type: string, format: date-time }
+        last_error: { type: string }
+        uploaded_until: { type: string, format: date-time, description: "pvoutput_export: end of the last status uploaded" }
+        upload: { $ref: "#/components/schemas/HostedUpload" }
+
+    HostedUpload:
+      type: object
+      description: >-
+        The FTP account of a `solarlog_hosted` source on noonside's FTP server. FTP and FTPS
+        (explicit TLS) on `port`, passive mode; the account only sees its own directory. Each
+        upload starts an import (after 30 s without further uploads). Imported minute files are
+        deleted after `retention_days`, other files after a day; the server refuses uploads
+        beyond `quota_bytes`.
+      required: [host, port, username, directory, quota_bytes, used_bytes, locked, retention_days]
+      properties:
+        host: { type: string }
+        port: { type: integer }
+        username: { type: string }
+        directory: { type: string }
+        password:
+          type: string
+          description: Only in the responses that create or reset it; it is never shown again.
+        quota_bytes: { type: integer, format: int64 }
+        used_bytes: { type: integer, format: int64, description: Usage at the last run }
+        locked: { type: boolean, description: The quota is used up, so uploads are refused }
+        retention_days: { type: integer }
+
+    HostedFtpEvent:
+      type: object
+      required: [username]
+      properties:
+        username: { type: string, maxLength: 255 }
+        path: { type: string, maxLength: 4096, description: "Uploaded file, relative to the account's root" }
+        event: { type: string, maxLength: 50 }
+
+    DataSourceCreate:
+      type: object
+      required: [kind, name, config]
+      properties:
+        kind: { $ref: "#/components/schemas/DataSourceKind" }
+        name: { type: string, minLength: 1, maxLength: 200 }
+        enabled: { type: boolean, default: true }
+        poll_interval_s: { type: integer, minimum: 30, default: 300 }
+        config: { $ref: "#/components/schemas/DataSourceConfig" }
+
+    DataSourceUpdate:
+      type: object
+      properties:
+        name: { type: string, minLength: 1, maxLength: 200 }
+        enabled: { type: boolean }
+        poll_interval_s: { type: integer, minimum: 30 }
+        config: { $ref: "#/components/schemas/DataSourceConfig" }
+
+    APIKey:
+      type: object
+      required: [id, name, prefix, scopes, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        prefix: { type: string, description: First characters of the key, for identification }
+        scopes:
+          type: array
+          items: { $ref: "#/components/schemas/APIKeyScope" }
+        created_at: { type: string, format: date-time }
+        last_used_at: { type: string, format: date-time }
+
+    APIKeyScope:
+      type: string
+      enum: [data:ingest, data:read]
+      description: "data:ingest: push measurements; data:read: live, overview, daily energy, weather, prices, advice"
+
+    CreateAPIKeyRequest:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 200 }
+        scopes:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items: { $ref: "#/components/schemas/APIKeyScope" }
+          description: Default data:ingest.
+
+    CreatedAPIKey:
+      type: object
+      required: [api_key, key]
+      properties:
+        api_key: { $ref: "#/components/schemas/APIKey" }
+        key: { type: string }
+
+    ShareLink:
+      type: object
+      required: [id, label, prefix, show_financials, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        label: { type: string }
+        prefix: { type: string, description: First characters of the token, for identification }
+        show_financials: { type: boolean, description: Show revenue and the tariff }
+        expires_at: { type: string, format: date-time }
+        created_at: { type: string, format: date-time }
+        created_by: { type: string, description: Name of the member who created it }
+
+    CreateShareLinkRequest:
+      type: object
+      required: [label]
+      properties:
+        label: { type: string, minLength: 1, maxLength: 200 }
+        show_financials: { type: boolean, default: false }
+        expires_at: { type: string, format: date-time }
+
+    CreatedShareLink:
+      type: object
+      required: [share_link, token, url]
+      properties:
+        share_link: { $ref: "#/components/schemas/ShareLink" }
+        token: { type: string }
+        url: { type: string, description: Public page of the link }
+
+    PublicSystem:
+      type: object
+      required: [name, label, timezone, peak_power_kwp, currency, show_financials, inverters]
+      properties:
+        name: { type: string }
+        label: { type: string }
+        image_url: { type: string }
+        timezone: { type: string }
+        peak_power_kwp: { type: number }
+        commissioned_at: { type: string, format: date }
+        currency: { type: string }
+        tariff_per_kwh: { type: number, description: Only with show_financials }
+        co2_kg_per_kwh: { type: number }
+        show_financials: { type: boolean }
+        inverters:
+          type: array
+          items: { $ref: "#/components/schemas/PublicInverter" }
+
+    PublicInverter:
+      type: object
+      required: [id, name, color, peak_power_kwp, sort_order]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        color: { type: string }
+        peak_power_kwp: { type: number }
+        sort_order: { type: integer }
+
+    AdminUser:
+      type: object
+      required: [id, email, name, is_superadmin, disabled, created_at, systems]
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string }
+        name: { type: string }
+        avatar_url: { type: string }
+        is_superadmin: { type: boolean }
+        disabled: { type: boolean, description: The account cannot sign in }
+        created_at: { type: string, format: date-time }
+        last_sign_in_at: { type: string, format: date-time }
+        systems:
+          type: array
+          items: { $ref: "#/components/schemas/UserSystemRole" }
+
+    AdminSystem:
+      type: object
+      required: [system, inverter_count, member_count, owners]
+      properties:
+        system: { $ref: "#/components/schemas/System" }
+        inverter_count: { type: integer }
+        member_count: { type: integer }
+        owners:
+          type: array
+          items: { $ref: "#/components/schemas/AdminSystemOwner" }
+
+    AdminSystemOwner:
+      type: object
+      required: [user_id, email, name]
+      properties:
+        user_id: { type: string, format: uuid }
+        email: { type: string }
+        name: { type: string }
+
+    UserSystemRole:
+      type: object
+      required: [system_id, name, role]
+      properties:
+        system_id: { type: string, format: uuid }
+        name: { type: string }
+        role: { $ref: "#/components/schemas/Role" }
+
+    CreateUserRequest:
+      type: object
+      required: [email, name, password]
+      properties:
+        email: { type: string, format: email }
+        name: { type: string, minLength: 1, maxLength: 200 }
+        password: { type: string, minLength: 10, maxLength: 200 }
+        superadmin: { type: boolean }
+
+    UpdateUserRequest:
+      type: object
+      properties:
+        name: { type: string, minLength: 1, maxLength: 200 }
+        email: { type: string, format: email }
+        is_superadmin: { type: boolean }
+        disabled: { type: boolean }
+
+    Severity:
+      type: string
+      enum: [info, warning, error]
+
+    Notification:
+      type: object
+      required: [id, type, severity, title, body, url, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        type:
+          type: string
+          description: alert_opened, alert_resolved, alert_reminder, forecast, report, announcement or test; clients show unknown types like announcements
+        severity: { $ref: "#/components/schemas/Severity" }
+        title: { type: string }
+        body: { type: string }
+        url: { type: string, description: App path to open }
+        system_id: { type: string, format: uuid }
+        alert_id: { type: string, format: uuid }
+        created_at: { type: string, format: date-time }
+        read_at: { type: string, format: date-time }
+
+    NotificationPage:
+      type: object
+      required: [items, unread]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Notification" }
+        next_cursor: { type: string }
+        unread: { type: integer }
+
+    UnreadCount:
+      type: object
+      required: [count]
+      properties:
+        count: { type: integer }
+
+    MarkNotificationsReadRequest:
+      type: object
+      properties:
+        ids:
+          type: array
+          maxItems: 500
+          items: { type: string, format: uuid }
+        all: { type: boolean }
+
+    DeleteNotificationsRequest:
+      type: object
+      properties:
+        ids:
+          type: array
+          maxItems: 500
+          items: { type: string, format: uuid }
+        read:
+          type: boolean
+          description: Delete all read notifications.
+
+    NotificationChannel:
+      type: string
+      enum: [in_app, email, push, ntfy, webhook]
+      description: >-
+        in_app: counts as unread (bell and app badge); every notification is listed either way.
+        ntfy and webhook go to the caller's targets (see /me/notification-targets), if set.
+
+    NotificationChannels:
+      type: array
+      uniqueItems: true
+      maxItems: 5
+      items: { $ref: "#/components/schemas/NotificationChannel" }
+
+    NotificationPreference:
+      type: object
+      required: [alerts, reports, forecast]
+      properties:
+        system_id:
+          type: string
+          format: uuid
+          description: Missing for the default that applies to all systems.
+        alerts:
+          type: object
+          required: [channels, min_severity, notify_resolved]
+          properties:
+            channels: { $ref: "#/components/schemas/NotificationChannels" }
+            min_severity: { $ref: "#/components/schemas/Severity" }
+            notify_resolved: { type: boolean }
+        reports:
+          type: object
+          required: [channels, digest]
+          properties:
+            channels: { $ref: "#/components/schemas/NotificationChannels" }
+            digest:
+              type: string
+              enum: [none, daily, weekly, monthly]
+              description: >-
+                Yield report: daily (yesterday), weekly (Mondays) or monthly (on the 1st),
+                each around 06:00 system time. Any report also brings the yearly report in January.
+                The email carries the full report; other channels a short summary.
+        forecast:
+          type: object
+          required: [channels, enabled]
+          properties:
+            channels: { $ref: "#/components/schemas/NotificationChannels" }
+            enabled:
+              type: boolean
+              description: Send the day's expected yield from the weather forecast in the morning (about 07:00 system time).
+        muted_until: { type: string, format: date-time }
+
+    NotificationPreferences:
+      type: object
+      required: [default, systems, member_systems, email_available, push_available]
+      properties:
+        default: { $ref: "#/components/schemas/NotificationPreference" }
+        systems:
+          type: array
+          items: { $ref: "#/components/schemas/NotificationPreference" }
+        member_systems:
+          type: array
+          description: Systems the caller is a member of (only members get their alerts).
+          items:
+            type: object
+            required: [system_id, name]
+            properties:
+              system_id: { type: string, format: uuid }
+              name: { type: string }
+        email_available: { type: boolean, description: The server delivers email }
+        push_available: { type: boolean, description: The server sends Web Push }
+
+    NotificationPreferencesUpdate:
+      type: object
+      required: [default]
+      properties:
+        default: { $ref: "#/components/schemas/NotificationPreference" }
+        systems:
+          type: array
+          maxItems: 200
+          items: { $ref: "#/components/schemas/NotificationPreference" }
+
+    PushSubscriptionRequest:
+      type: object
+      required: [endpoint, keys]
+      properties:
+        endpoint: { type: string, minLength: 1, maxLength: 2000 }
+        keys:
+          type: object
+          required: [p256dh, auth]
+          properties:
+            p256dh: { type: string, minLength: 1, maxLength: 200 }
+            auth: { type: string, minLength: 1, maxLength: 100 }
+        user_agent: { type: string, maxLength: 500 }
+
+    NotificationTargets:
+      type: object
+      required: [ntfy_url, ntfy_has_token, webhook_url, webhook_has_secret]
+      properties:
+        ntfy_url: { type: string, description: "Topic URL, e.g. https://ntfy.sh/my-topic; empty if not set" }
+        ntfy_has_token: { type: boolean }
+        webhook_url: { type: string, description: Empty if not set }
+        webhook_has_secret:
+          type: boolean
+          description: >-
+            Webhooks are signed: X-Noonside-Signature is "sha256=" and the hex HMAC-SHA256 of the raw
+            request body with the secret.
+
+    NotificationTargetsUpdate:
+      type: object
+      properties:
+        ntfy_url: { type: string, maxLength: 2000 }
+        ntfy_token: { type: string, maxLength: 200, description: Access token for a protected topic }
+        webhook_url: { type: string, maxLength: 2000 }
+        webhook_secret: { type: string, maxLength: 200, description: Signing secret (HMAC-SHA256) }
+
+    TestTargetResult:
+      type: object
+      required: [ok]
+      properties:
+        ok: { type: boolean }
+        error: { type: string, description: Why the target refused it }
+
+    WebhookEvent:
+      type: string
+      enum: [alert.opened, alert.resolved, daily.summary, surplus.forecast]
+      description: >-
+        alert.opened / alert.resolved: an alert of the system changed. daily.summary: yesterday's
+        yield, sent once from 06:00 system time. surplus.forecast: today's best window for large
+        loads (see getAdvice), sent once between 07:00 and 10:00.
+
+    Webhook:
+      type: object
+      required: [id, name, url, events, enabled, has_secret, locale, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        url: { type: string }
+        events:
+          type: array
+          items: { $ref: "#/components/schemas/WebhookEvent" }
+        enabled: { type: boolean }
+        has_secret: { type: boolean }
+        locale:
+          $ref: "#/components/schemas/Locale"
+          description: Language of title and body
+        created_at: { type: string, format: date-time }
+        last_delivery_at: { type: string, format: date-time }
+        last_status: { type: string, enum: [pending, sent, failed] }
+        last_error: { type: string }
+
+    WebhookCreate:
+      type: object
+      required: [name, url, events]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 200 }
+        url: { type: string, minLength: 1, maxLength: 2000 }
+        secret: { type: string, maxLength: 200, description: Signing secret (HMAC-SHA256) }
+        events:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items: { $ref: "#/components/schemas/WebhookEvent" }
+        enabled: { type: boolean, default: true }
+        locale: { $ref: "#/components/schemas/Locale" }
+
+    WebhookUpdate:
+      type: object
+      properties:
+        name: { type: string, minLength: 1, maxLength: 200 }
+        url: { type: string, minLength: 1, maxLength: 2000 }
+        secret: { type: string, maxLength: 200 }
+        events:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items: { $ref: "#/components/schemas/WebhookEvent" }
+        enabled: { type: boolean }
+        locale: { $ref: "#/components/schemas/Locale" }
+
+    WebhookDelivery:
+      type: object
+      required: [id, event_id, event, status, attempts, created_at, last_error]
+      properties:
+        id: { type: integer, format: int64 }
+        event_id: { type: string, format: uuid }
+        event: { type: string, description: A WebhookEvent or "test" }
+        status: { type: string, enum: [pending, sent, failed] }
+        attempts: { type: integer }
+        created_at: { type: string, format: date-time }
+        sent_at: { type: string, format: date-time }
+        next_attempt_at: { type: string, format: date-time }
+        last_error: { type: string }
+
+    WebhookPayload:
+      type: object
+      description: >-
+        Body of every webhook request (headers: X-Noonside-Event, X-Noonside-Delivery = id,
+        X-Noonside-Signature if a secret is set). `data` depends on the event: alert.* carry
+        alert_id, kind, severity, subject, title, body, opened_at, resolved_at and details;
+        daily.summary a DailySummary; surplus.forecast an Advice.
+      required: [id, event, created_at, system_id, system_name, url, data]
+      properties:
+        id: { type: string, format: uuid, description: Same for retries of one event }
+        event: { type: string }
+        created_at: { type: string, format: date-time }
+        system_id: { type: string, format: uuid }
+        system_name: { type: string }
+        url: { type: string, description: Opens the system in the app }
+        data: { type: object, additionalProperties: true }
+
+    DailySummary:
+      type: object
+      required: [date, energy_kwh, revenue, currency, co2_avoided_kg, inverters]
+      properties:
+        date: { type: string, format: date }
+        energy_kwh: { type: number }
+        kwh_per_kwp: { type: number }
+        expected_kwh: { type: number, description: Weather-based where known, else from the monthly target }
+        peak_w: { type: number }
+        peak_at: { type: string, format: date-time }
+        revenue: { type: number }
+        currency: { type: string }
+        co2_avoided_kg: { type: number }
+        negative_price_kwh: { type: number }
+        inverters:
+          type: array
+          items:
+            type: object
+            required: [name, energy_kwh]
+            properties:
+              name: { type: string }
+              energy_kwh: { type: number }
+
+    PricePoint:
+      type: object
+      required: [start, end, eur_mwh]
+      properties:
+        start: { type: string, format: date-time }
+        end: { type: string, format: date-time }
+        eur_mwh: { type: number, description: Day-ahead price in EUR/MWh (divide by 10 for ct/kWh) }
+
+    MarketPrices:
+      type: object
+      required: [prices]
+      properties:
+        zone: { type: string }
+        source: { type: string, description: Data provider, for attribution }
+        prices:
+          type: array
+          items: { $ref: "#/components/schemas/PricePoint" }
+
+    AdviceWindow:
+      type: object
+      required: [start, end]
+      properties:
+        start: { type: string, format: date-time }
+        end: { type: string, format: date-time }
+        expected_kwh: { type: number, description: Expected PV energy in the window }
+        mean_w: { type: number, description: Mean expected PV power }
+        mean_eur_mwh: { type: number, description: Mean day-ahead price, with a price zone }
+
+    AdviceSlot:
+      type: object
+      required: [start, end]
+      properties:
+        start: { type: string, format: date-time }
+        end: { type: string, format: date-time }
+        expected_w: { type: number, description: Mean expected PV power }
+        eur_mwh: { type: number }
+
+    Advice:
+      type: object
+      required: [available, date, hours, negative_prices, slots]
+      properties:
+        available:
+          type: boolean
+          description: False without coordinates and kWp (no forecast) and without prices.
+        date: { type: string, format: date }
+        hours: { type: integer, description: Window length }
+        expected_kwh: { type: number, description: Expected PV energy of the whole day }
+        remaining_kwh: { type: number, description: Expected PV energy from now to the end of the day }
+        solar_window:
+          $ref: "#/components/schemas/AdviceWindow"
+          description: Rest of today's window with the most expected PV energy; missing when none is left.
+        cheap_window:
+          $ref: "#/components/schemas/AdviceWindow"
+          description: Rest of today's window with the lowest mean price.
+        negative_prices:
+          type: array
+          description: Remaining intervals of today with a negative price (merged).
+          items: { $ref: "#/components/schemas/PricePoint" }
+        slots:
+          type: array
+          description: Hourly expected power and mean price for the rest of today.
+          items: { $ref: "#/components/schemas/AdviceSlot" }
+
+    TestPushResult:
+      type: object
+      required: [devices]
+      properties:
+        devices: { type: integer }
+
+    PushConfig:
+      type: object
+      required: [enabled]
+      properties:
+        enabled: { type: boolean }
+        public_key: { type: string, description: VAPID public key (base64url) }
+
+    Alert:
+      type: object
+      required: [id, kind, severity, title, body, details, opened_at, last_seen_at]
+      properties:
+        id: { type: string, format: uuid }
+        kind: { type: string }
+        severity: { $ref: "#/components/schemas/Severity" }
+        title: { type: string }
+        body: { type: string }
+        inverter_id: { type: string, format: uuid }
+        data_source_id: { type: string, format: uuid }
+        details:
+          type: object
+          additionalProperties: {}
+        opened_at: { type: string, format: date-time }
+        last_seen_at: { type: string, format: date-time }
+        resolved_at: { type: string, format: date-time }
+        acked_at: { type: string, format: date-time }
+        acked_by: { type: string, format: uuid }
+        snoozed_until: { type: string, format: date-time }
+
+    AlertPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Alert" }
+        next_cursor: { type: string }
+
+    SnoozeAlertRequest:
+      type: object
+      required: [until]
+      properties:
+        until:
+          type: [string, "null"]
+          format: date-time
+
+    AlertRule:
+      type: object
+      required: [kind, enabled, severity, params, defaults]
+      properties:
+        kind: { type: string }
+        enabled: { type: boolean }
+        severity: { $ref: "#/components/schemas/Severity" }
+        params:
+          type: object
+          additionalProperties: { type: number }
+        defaults:
+          type: object
+          additionalProperties: { type: number }
+
+    AlertRuleUpdate:
+      type: object
+      required: [kind, enabled]
+      properties:
+        kind: { type: string }
+        enabled: { type: boolean }
+        params:
+          type: object
+          additionalProperties: { type: number }
+
+  responses:
+    Error:
+      description: |
+        Error. Status codes: 400 invalid input, 401 missing/invalid credentials,
+        403 missing scope, 404 not found (also returned for systems the caller
+        cannot see), 409 conflict, 500 internal error.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    LandingRedirect:
+      description: Back to a page of the landing site.
+      headers:
+        Location:
+          required: true
+          schema: { type: string }

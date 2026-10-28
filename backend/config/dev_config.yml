@@ -1,0 +1,30 @@
+allow_private_data_source_hosts: true
+# Frontend dev server and Swagger UI from docker-compose.
+cors_allowed_origins:
+  - http://localhost:5173
+  - http://localhost:8081
+# Local stack from compose.yaml (`mise run db:up`). The SPA reaches GoTrue as
+# /auth/v1 through Vite, which issues tokens for http://localhost:5173/auth/v1;
+# the server calls it directly. SUPABASE_SECRET_KEY is set by the mise tasks.
+supabase_url: http://localhost:5173
+supabase_internal_url: http://127.0.0.1:9999
+database_url: postgresql://postgres:postgres@127.0.0.1:54322/postgres
+# Served to GoTrue (compose.yaml) for its emails.
+auth_templates_dir: ../db/auth-templates
+# Mailpit from compose.yaml: web UI on http://127.0.0.1:54324
+smtp_host: 127.0.0.1
+smtp_port: 54325
+smtp_tls: none
+mail_from: noreply@noonside.local
+# Uploaded pictures in backend/tmp/media (gitignored).
+media_dir: ../tmp/media
+# Astro dev server of the landing site (`mise run landing:dev`).
+landing_url: http://localhost:4321
+# Hosted FTP against SFTPGo from compose.yaml (SFTPGO_ADMIN_PASSWORD is set by
+# the mise tasks; also needs SECRET_KEY). Devices upload to 127.0.0.1:2121;
+# SFTPGo calls the hook of `mise run dev` on the host.
+hosted_ftp_api_url: http://127.0.0.1:8090
+hosted_ftp_sftp_addr: 127.0.0.1:2022
+hosted_ftp_public_host: 127.0.0.1
+hosted_ftp_public_port: 2121
+hosted_ftp_hook_url: http://host.docker.internal:8080/api/v1/hooks/hosted-ftp

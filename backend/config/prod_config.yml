@@ -1,0 +1,20 @@
+# Production defaults for the Helm chart (deploy/helm/noonside). Everything
+# specific to an installation (public_url, supabase_url, SMTP, mail_from,
+# vapid_public_key, Sentry, hosted FTP) comes from the chart's values as env
+# vars, the secrets from the release's secrets. The chart also sets the
+# in-cluster addresses (DATABASE_URL, SUPABASE_INTERNAL_URL).
+
+# The web app is served from the same origin (its own container behind the
+# same gateway), so no CORS.
+cors_allowed_origins: []
+
+# Paths in the image (backend/Dockerfile); media_dir is the chart's volume.
+media_dir: /data/media
+auth_templates_dir: /auth-templates
+migrations_dir: /migrations
+scheduler_enabled: true
+
+# Behind a gateway that appends the client to X-Forwarded-For (the chart's
+# trustedProxyHops overrides it).
+rate_limit_enabled: true
+trusted_proxy_hops: 1

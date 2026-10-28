@@ -1,0 +1,16 @@
+{{define "content"}}
+{{template "heading" .Data.Subject}}
+{{range .Data.Items}}
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 12px 0; border:1px solid #e7e2d8; border-left:4px solid {{.Color}}; border-radius:10px;">
+  <tr>
+    <td style="padding:14px 18px;">
+      <a href="{{.URL}}" style="font-size:16px; line-height:22px; font-weight:600; color:#1c1917; text-decoration:none;">{{.Title}}</a>
+      <p style="margin:4px 0 0 0; font-size:14px; line-height:22px; color:#57534e;">{{.Body}}</p>
+    </td>
+  </tr>
+</table>
+{{end}}
+{{template "button" (map "URL" .Data.ButtonURL "Label" .Data.ButtonLabel)}}
+{{end}}
+
+{{define "footer"}}{{.Data.Footer}} <a href="{{.Data.ManageURL}}" style="color:#78716c;">{{.Data.ManageLabel}}</a>{{end}}

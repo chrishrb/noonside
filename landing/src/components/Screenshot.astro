@@ -1,0 +1,49 @@
+---
+// A screenshot of the app from src/assets/screens (`mise run landing:screens`),
+// light and dark. Desktop shots are single cards cropped from the app at 2x,
+// phone shots full screens at 3x, so the srcset can serve sharp images to
+// high-density screens.
+import { getImage } from 'astro:assets';
+import type { ImageMetadata } from 'astro';
+import IPhone from './IPhone.astro';
+
+const all = import.meta.glob<{ default: ImageMetadata }>('../assets/screens/*/*.png', { eager: true });
+const find = (set: string, name: string) => all[`../assets/screens/${set}/${name}.png`]?.default;
+
+interface Props {
+  name: string;
+  alt: string;
+  device?: 'desktop' | 'phone';
+  eager?: boolean;
+  /** Rendered width, for the browser's choice from the srcset. */
+  sizes?: string;
+}
+const { name, alt, device = 'desktop', eager = false } = Astro.props;
+const phone = device === 'phone';
+const sizes = Astro.props.sizes ?? (phone ? '300px' : '(min-width: 900px) 640px, calc(100vw - 32px)');
+
+const light = find(`${device}-light`, name);
+const dark = find(`${device}-dark`, name);
+if (!light) throw new Error(`missing screenshot ${device}-light/${name}; run mise run landing:screens`);
+const widths = phone ? [400, 600, 900] : [600, 800, 1200, 1600];
+const opts = { widths, sizes, format: 'webp', quality: 90 } as const;
+const img = await getImage({ src: light, ...opts });
+const imgDark = dark ? await getImage({ src: dark, ...opts }) : undefined;
+---
+{phone ? (
+  <IPhone>
+    <picture>
+      {imgDark && <source media="(prefers-color-scheme: dark)" srcset={imgDark.srcSet.attribute} sizes={sizes} type="image/webp" />}
+      <source srcset={img.srcSet.attribute} sizes={sizes} type="image/webp" />
+      <img src={img.src} width={light.width} height={light.height} alt={alt} loading={eager ? 'eager' : 'lazy'} decoding="async" />
+    </picture>
+  </IPhone>
+) : (
+  <div class="crop">
+    <picture>
+      {imgDark && <source media="(prefers-color-scheme: dark)" srcset={imgDark.srcSet.attribute} sizes={sizes} type="image/webp" />}
+      <source srcset={img.srcSet.attribute} sizes={sizes} type="image/webp" />
+      <img src={img.src} width={light.width} height={light.height} alt={alt} loading={eager ? 'eager' : 'lazy'} decoding="async" fetchpriority={eager ? 'high' : 'auto'} />
+    </picture>
+  </div>
+)}

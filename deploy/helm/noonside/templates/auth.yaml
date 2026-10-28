@@ -1,0 +1,172 @@
+{{- $origin := include "noonside.origin" . -}}
+{{- $templates := printf "http://%s:8080/auth-templates" (include "noonside.apiName" .) -}}
+# The Auth server (Supabase's GoTrue). The SPA signs in through /auth/v1 of the
+# app's origin (HTTPRoute); the API calls it in-cluster for its keys and the
+# admin API. Keep the settings in sync with compose.yaml.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "noonside.authName" . }}
+  labels:
+    {{- include "noonside.labels" . | nindent 4 }}
+    app.kubernetes.io/component: auth
+  {{- with .Values.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "noonside.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: auth
+  template:
+    metadata:
+      labels:
+        {{- include "noonside.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: auth
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10000
+        runAsGroup: 10000
+        seccompProfile:
+          type: RuntimeDefault
+      enableServiceLinks: false
+      containers:
+        - name: auth
+          image: "{{ .Values.auth.image.repository }}:{{ .Values.auth.image.tag }}"
+          imagePullPolicy: {{ .Values.auth.image.pullPolicy }}
+          args: ["auth"]
+          envFrom:
+            - secretRef:
+                name: {{ .Values.auth.existingSecret }}
+          env:
+            - name: GOTRUE_API_HOST
+              value: 0.0.0.0
+            - name: GOTRUE_API_PORT
+              value: "9999"
+            - name: API_EXTERNAL_URL
+              value: {{ printf "%s/auth/v1" $origin | quote }}
+            - name: GOTRUE_JWT_ISSUER
+              value: {{ printf "%s/auth/v1" $origin | quote }}
+            - name: GOTRUE_SITE_URL
+              value: {{ $origin | quote }}
+            - name: GOTRUE_URI_ALLOW_LIST
+              value: {{ printf "%s,%s/reset-password" $origin $origin | quote }}
+            - name: GOTRUE_DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "noonside.authDbSecret" . }}
+                  key: username
+            - name: GOTRUE_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "noonside.authDbSecret" . }}
+                  key: password
+            - name: GOTRUE_DB_DRIVER
+              value: postgres
+            - name: GOTRUE_DB_DATABASE_URL
+              value: {{ printf "postgres://$(GOTRUE_DB_USER):$(GOTRUE_DB_PASSWORD)@%s:%s/%s?sslmode=%s" (include "noonside.dbHost" .) (include "noonside.dbPort" .) (include "noonside.dbName" .) (include "noonside.dbSSLMode" .) | quote }}
+            - name: GOTRUE_DB_NAMESPACE
+              value: auth
+            - name: GOTRUE_JWT_EXP
+              value: {{ .Values.auth.jwtExpSeconds | quote }}
+            - name: GOTRUE_JWT_AUD
+              value: authenticated
+            - name: GOTRUE_JWT_DEFAULT_GROUP_NAME
+              value: authenticated
+            - name: GOTRUE_JWT_ADMIN_ROLES
+              value: service_role
+            - name: GOTRUE_JWT_VALID_METHODS
+              value: HS256,RS256,ES256
+            - name: GOTRUE_DISABLE_SIGNUP
+              value: "true"
+            - name: GOTRUE_EXTERNAL_EMAIL_ENABLED
+              value: "true"
+            - name: GOTRUE_EXTERNAL_PHONE_ENABLED
+              value: "false"
+            - name: GOTRUE_EXTERNAL_ANONYMOUS_USERS_ENABLED
+              value: "false"
+            - name: GOTRUE_SECURITY_MANUAL_LINKING_ENABLED
+              value: "false"
+            - name: GOTRUE_PASSWORD_MIN_LENGTH
+              value: {{ .Values.auth.passwordMinLength | quote }}
+            - name: GOTRUE_SECURITY_REFRESH_TOKEN_ROTATION_ENABLED
+              value: "true"
+            - name: GOTRUE_SECURITY_REFRESH_TOKEN_REUSE_INTERVAL
+              value: "10"
+            - name: GOTRUE_MAILER_AUTOCONFIRM
+              value: "false"
+            - name: GOTRUE_MAILER_SECURE_EMAIL_CHANGE_ENABLED
+              value: "true"
+            - name: GOTRUE_MAILER_OTP_EXP
+              value: "3600"
+            # Links in the emails; GoTrue drops API_EXTERNAL_URL's path otherwise.
+            {{- range list "CONFIRMATION" "INVITE" "RECOVERY" "EMAIL_CHANGE" }}
+            - name: GOTRUE_MAILER_URLPATHS_{{ . }}
+              value: {{ printf "%s/auth/v1/verify" $origin | quote }}
+            {{- end }}
+            {{- range $kind, $subject := dict "CONFIRMATION" "Confirm your email" "RECOVERY" "Reset your password" "MAGIC_LINK" "Your sign-in link" "EMAIL_CHANGE" "Confirm your new email" }}
+            - name: GOTRUE_MAILER_SUBJECTS_{{ $kind }}
+              value: {{ $subject | quote }}
+            - name: GOTRUE_MAILER_TEMPLATES_{{ $kind }}
+              value: {{ printf "%s/%s.html" $templates (lower $kind) | quote }}
+            {{- end }}
+            # The API's SMTP settings; the password is GOTRUE_SMTP_PASS in
+            # auth.existingSecret.
+            - name: GOTRUE_SMTP_HOST
+              value: {{ .Values.smtp.host | quote }}
+            - name: GOTRUE_SMTP_PORT
+              value: {{ .Values.smtp.port | quote }}
+            - name: GOTRUE_SMTP_USER
+              value: {{ .Values.smtp.user | quote }}
+            - name: GOTRUE_SMTP_ADMIN_EMAIL
+              value: {{ .Values.smtp.from | quote }}
+            - name: GOTRUE_SMTP_SENDER_NAME
+              value: {{ .Values.smtp.fromName | quote }}
+            # Rate limits per client IP: the gateway appends it to X-Forwarded-For.
+            - name: GOTRUE_RATE_LIMIT_HEADER
+              value: X-Forwarded-For
+            - name: GOTRUE_RATE_LIMIT_EMAIL_SENT
+              value: {{ .Values.auth.rateLimits.emailSent | quote }}
+            - name: GOTRUE_RATE_LIMIT_TOKEN_REFRESH
+              value: {{ .Values.auth.rateLimits.tokenRefresh | quote }}
+            - name: GOTRUE_RATE_LIMIT_VERIFY
+              value: {{ .Values.auth.rateLimits.verify | quote }}
+            - name: GOTRUE_RATE_LIMIT_OTP
+              value: {{ .Values.auth.rateLimits.otp | quote }}
+            {{- range $k, $v := .Values.auth.env }}
+            - name: {{ $k }}
+              value: {{ $v | quote }}
+            {{- end }}
+          ports:
+            - name: http
+              containerPort: 9999
+          readinessProbe:
+            httpGet: { path: /health, port: http }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /health, port: http }
+            periodSeconds: 20
+            failureThreshold: 6
+          resources:
+            {{- toYaml .Values.auth.resources | nindent 12 }}
+          securityContext:
+            {{- include "noonside.securityContext" . | nindent 12 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "noonside.authName" . }}
+  labels:
+    {{- include "noonside.labels" . | nindent 4 }}
+    app.kubernetes.io/component: auth
+spec:
+  selector:
+    {{- include "noonside.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: auth
+  ports:
+    - name: http
+      port: 9999
+      targetPort: http

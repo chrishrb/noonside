@@ -1,0 +1,16 @@
+{{define "content"}}
+{{template "heading" "Fast geschafft"}}
+<p style="margin:0 0 16px 0;">Danke für Ihr Interesse an {{.App.Name}}, dem herstellerunabhängigen Monitoring für Photovoltaikanlagen.</p>
+<p style="margin:0 0 16px 0;">Bitte bestätigen Sie, dass Sie auf die Warteliste möchten. Wir schreiben Ihnen, sobald die Beta startet und noonside verfügbar ist, sonst nichts.</p>
+
+{{template "button" (map "URL" .Data.ConfirmURL "Label" "Anmeldung bestätigen")}}
+
+<p style="margin:0; font-size:14px; line-height:22px; color:#78716c;">Der Link gilt bis zum {{.Data.ExpiresDate}}. Sie haben sich nicht angemeldet? Dann ignorieren Sie diese E-Mail einfach; ohne Bestätigung löschen wir Ihre Adresse nach 7 Tagen.</p>
+
+<p style="margin:24px 0 0 0; padding-top:20px; border-top:1px solid #e7e2d8; font-size:13px; line-height:20px; color:#78716c;">
+  Falls der Button nicht funktioniert, kopieren Sie diesen Link in Ihren Browser:<br>
+  <a href="{{.Data.ConfirmURL}}" style="color:#c2410c; word-break:break-all;">{{.Data.ConfirmURL}}</a>
+</p>
+{{end}}
+
+{{define "footer"}}Sie erhalten diese E-Mail, weil diese Adresse auf der Warteliste von {{.App.Name}} eingetragen wurde. <a href="{{.Data.UnsubscribeURL}}" style="color:#78716c;">Abmelden</a>{{end}}

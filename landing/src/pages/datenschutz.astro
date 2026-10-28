@@ -1,0 +1,54 @@
+---
+// Datenschutzerklärung (Art. 13 DSGVO) for the landing site and the
+// waitlist. Draft: have it checked before launch. Keep it in sync with what
+// the code does:
+// backend/internal/api/waitlist.go, alerts.Engine.Prune (7 days).
+import Base from '../layouts/Base.astro';
+import { hosting, mailProvider, operator } from '../lib/site';
+---
+<Base title="Datenschutzerklärung" description="Wie noonside mit Ihren Daten umgeht." noindex>
+  <section class="page">
+    <div class="wrap prose">
+      <h1>Datenschutzerklärung</h1>
+      <p>Diese Erklärung gilt für diese Website und die Warteliste von noonside. Für die noonside-App gilt eine eigene Datenschutzerklärung, die Sie bei der Registrierung erhalten.</p>
+
+      <h2>1. Verantwortlicher</h2>
+      <address>
+        {operator.name}<br />
+        {operator.street}<br />
+        {operator.city}<br />
+        E-Mail: <a href={`mailto:${operator.email}`}>{operator.email}</a>
+      </address>
+
+      <h2>2. Aufruf dieser Website</h2>
+      <p>Die Website wird von unserem Server bei {hosting.name} ausgeliefert. Beim Aufruf verarbeitet der Server technisch notwendig Ihre IP-Adresse, die angefragte Adresse, Datum und Uhrzeit sowie Angaben zu Browser und Betriebssystem, um die Seite auszuliefern und vor Missbrauch zu schützen (Anfragen pro IP-Adresse werden kurzzeitig gezählt und begrenzt). Wir speichern keine Zugriffsprotokolle. Rechtsgrundlage ist unser berechtigtes Interesse an einer sicheren, funktionierenden Website (Art. 6 Abs. 1 lit. f DSGVO).</p>
+      <p>Diese Website setzt <strong>keine Cookies</strong>, nutzt keine Analyse- oder Tracking-Dienste und lädt keine Inhalte von Dritten (Schriften und Bilder liegen auf unserem Server).</p>
+
+      <h2>3. Klicks auf die Preis-Buttons</h2>
+      <p>Wenn Sie auf der Preisseite einen Plan anklicken, zählen wir nur, dass dieser Plan an diesem Tag einmal angeklickt wurde. Wir speichern dabei keine IP-Adresse und nichts, was auf Sie schließen lässt.</p>
+
+      <h2>4. Warteliste</h2>
+      <p>Wenn Sie sich auf die Warteliste eintragen, speichern wir Ihre E-Mail-Adresse, Ihre Angabe, was Sie am besten beschreibt, gegebenenfalls den gewählten Plan sowie die Zeitpunkte von Anmeldung, Versand der Bestätigungs-E-Mail und Bestätigung. Wir nutzen diese Daten, um Sie über den Start der Beta und von noonside zu informieren und um einzuschätzen, für wen sich noonside lohnt.</p>
+      <ul>
+        <li><strong>Rechtsgrundlage:</strong> Ihre Einwilligung (Art. 6 Abs. 1 lit. a DSGVO). Sie können sie jederzeit mit Wirkung für die Zukunft widerrufen, über den Abmeldelink in jeder E-Mail oder formlos per E-Mail an uns.</li>
+        <li><strong>Double-Opt-In:</strong> Sie erhalten zuerst eine E-Mail mit einem Bestätigungslink. Erst nach der Bestätigung stehen Sie auf der Warteliste. Die Zeitpunkte speichern wir, um Ihre Einwilligung nachweisen zu können.</li>
+        <li><strong>Speicherdauer:</strong> Unbestätigte Anmeldungen löschen wir nach 7 Tagen. Bestätigte Anmeldungen, bis Sie sich abmelden oder wir die Warteliste nicht mehr brauchen, spätestens zwölf Monate nach dem Start von noonside.</li>
+      </ul>
+
+      <h2>5. Empfänger und Auftragsverarbeiter</h2>
+      <ul>
+        <li><strong>{hosting.name}</strong>: Betrieb des Servers, der die Anmeldungen entgegennimmt und in dessen Datenbank die Warteliste gespeichert wird, Rechenzentrum {hosting.location}.</li>
+        <li><strong>Amazon Web Services EMEA SARL</strong> (Luxemburg): verschlüsselte Sicherungskopien der Datenbank, Rechenzentrum Frankfurt am Main.</li>
+        <li><strong>{mailProvider.name}</strong>: Versand der E-Mails, {mailProvider.location}.</li>
+      </ul>
+      <p>Mit allen Anbietern bestehen Verträge zur Auftragsverarbeitung (Art. 28 DSGVO). Eine Weitergabe an andere Dritte findet nicht statt.</p>
+
+      <h2>6. Ihre Rechte</h2>
+      <p>Sie haben das Recht auf Auskunft (Art. 15 DSGVO), Berichtigung (Art. 16), Löschung (Art. 17), Einschränkung der Verarbeitung (Art. 18), Datenübertragbarkeit (Art. 20) und Widerspruch gegen Verarbeitungen auf Grundlage berechtigter Interessen (Art. 21). Eine Einwilligung können Sie jederzeit widerrufen (Art. 7 Abs. 3). Schreiben Sie uns dazu an <a href={`mailto:${operator.email}`}>{operator.email}</a>.</p>
+      <p>Sie können sich außerdem bei einer Datenschutz-Aufsichtsbehörde beschweren, etwa bei der für Ihren Wohnort oder für unseren Sitz zuständigen.</p>
+
+      <h2>7. Stand</h2>
+      <p>Oktober 2026</p>
+    </div>
+  </section>
+</Base>

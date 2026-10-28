@@ -1,0 +1,15 @@
+{{define "content"}}Join {{.Data.SystemName}}
+
+{{.Data.Inviter}} invited you to the photovoltaic system "{{.Data.SystemName}}" on {{.App.Name}}.
+As {{if eq .Data.Role "admin" "owner"}}an{{else}}a{{end}} {{.Data.Role}} you can {{.Data.RoleDescription}}.
+
+  System:       {{.Data.SystemName}}
+  Role:         {{title .Data.Role}}
+  Valid until:  {{datetime .Data.ExpiresAt}}
+
+Accept the invitation:
+{{.Data.AcceptURL}}
+
+Not expecting this? You can ignore this email - nothing happens unless you accept.{{end}}
+
+{{define "footer"}}You received this email because someone invited this address to {{.App.Name}}.{{end}}

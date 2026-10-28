@@ -1,0 +1,51 @@
+# Values that switch everything on, for `mise run chart:lint`.
+host: noonside.example.com
+annotations:
+  reloader.stakater.com/auto: "true"
+imagePullSecrets:
+  - name: ghcr-pull
+smtp:
+  host: smtp.example.com
+  user: noonside
+  from: no-reply@example.com
+vapidPublicKey: BExampleExampleExampleExampleExampleExampleExampleExampleExampleExampleExampleExampleExa
+landingUrl: https://www.example.com
+sentry:
+  enabled: true
+  api:
+    dsn: https://key@o1.ingest.sentry.io/1
+  web:
+    dsn: https://key@o1.ingest.sentry.io/2
+media:
+  storageClass: standard
+postgres:
+  storage:
+    storageClass: standard
+  backup:
+    enabled: true
+    s3:
+      destinationPath: s3://example-backups/noonside
+      endpointURL: https://s3.example.com
+      credentials:
+        existingSecret: noonside-pg-backup
+        regionKey: REGION
+route:
+  enabled: true
+  parentRefs:
+    - name: external
+      namespace: networking
+      sectionName: https-noonside
+  redirectHostnames:
+    - old.example.com
+hostedFtp:
+  enabled: true
+  publicHost: ftp.example.com
+  admin:
+    existingSecret: noonside-sftpgo
+  ftp:
+    forcePassiveIP: 203.0.113.10
+    tls:
+      secretName: ftp-example-com-tls
+  hostKeySecret: noonside-sftpgo-hostkey
+  storage:
+    storageClass: standard

@@ -1,0 +1,126 @@
+{{- if .Values.postgres.enabled }}
+{{- $pg := include "noonside.pgName" . -}}
+# Roles, schemas and extensions GoTrue and the migrations expect
+# (files/init.sql; compose.yaml uses the same file).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $pg }}-init
+  labels:
+    {{- include "noonside.labels" . | nindent 4 }}
+data:
+  init.sql: |
+    {{- .Files.Get "files/init.sql" | nindent 4 }}
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: {{ $pg }}
+  labels:
+    {{- include "noonside.labels" . | nindent 4 }}
+  annotations:
+    # Never delete the database with the release.
+    helm.sh/resource-policy: keep
+spec:
+  instances: {{ .Values.postgres.instances }}
+  imageName: {{ .Values.postgres.imageName }}
+  primaryUpdateStrategy: unsupervised
+  # The app and its migrations connect as the superuser (secret <cluster>-superuser).
+  enableSuperuserAccess: true
+  storage:
+    size: {{ .Values.postgres.storage.size }}
+    {{- with .Values.postgres.storage.storageClass }}
+    storageClass: {{ . }}
+    {{- end }}
+  bootstrap:
+    initdb:
+      database: {{ .Values.postgres.database }}
+      owner: {{ .Values.postgres.database }}
+      postInitApplicationSQLRefs:
+        configMapRefs:
+          - name: {{ $pg }}-init
+            key: init.sql
+  managed:
+    roles:
+      # GoTrue's role (created by init.sql); CNPG sets its password.
+      - name: supabase_auth_admin
+        ensure: present
+        login: true
+        inherit: false
+        createrole: true
+        passwordSecret:
+          name: {{ .Values.postgres.authRoleSecret }}
+  {{- with .Values.postgres.parameters }}
+  postgresql:
+    parameters:
+      {{- toYaml . | nindent 6 }}
+  {{- end }}
+  resources:
+    {{- toYaml .Values.postgres.resources | nindent 4 }}
+  affinity:
+    enablePodAntiAffinity: false
+  {{- if .Values.postgres.monitoring }}
+  monitoring:
+    enablePodMonitor: true
+  {{- end }}
+  {{- if .Values.postgres.backup.enabled }}
+  plugins:
+    - name: barman-cloud.cloudnative-pg.io
+      isWALArchiver: {{ .Values.postgres.backup.walArchiving }}
+      parameters:
+        barmanObjectName: {{ $pg }}-backup
+  {{- end }}
+{{- if .Values.postgres.backup.enabled }}
+{{- $b := .Values.postgres.backup }}
+{{- $creds := $b.s3.credentials }}
+{{- $secret := required "postgres.backup.s3.credentials.existingSecret is required" $creds.existingSecret }}
+---
+apiVersion: barmancloud.cnpg.io/v1
+kind: ObjectStore
+metadata:
+  name: {{ $pg }}-backup
+  labels:
+    {{- include "noonside.labels" . | nindent 4 }}
+spec:
+  retentionPolicy: {{ $b.retentionPolicy | quote }}
+  configuration:
+    destinationPath: {{ required "postgres.backup.s3.destinationPath is required" $b.s3.destinationPath }}
+    {{- with $b.s3.endpointURL }}
+    endpointURL: {{ . }}
+    {{- end }}
+    s3Credentials:
+      accessKeyId:
+        name: {{ $secret }}
+        key: {{ $creds.accessKeyIdKey }}
+      secretAccessKey:
+        name: {{ $secret }}
+        key: {{ $creds.secretAccessKeyKey }}
+      {{- with $creds.regionKey }}
+      region:
+        name: {{ $secret }}
+        key: {{ . }}
+      {{- end }}
+    wal:
+      compression: {{ $b.compression }}
+    data:
+      compression: {{ $b.compression }}
+{{- if $b.schedule }}
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: ScheduledBackup
+metadata:
+  name: {{ $pg }}-daily
+  labels:
+    {{- include "noonside.labels" . | nindent 4 }}
+spec:
+  schedule: {{ $b.schedule | quote }}
+  immediate: {{ $b.immediate }}
+  backupOwnerReference: self
+  cluster:
+    name: {{ $pg }}
+  method: plugin
+  pluginConfiguration:
+    name: barman-cloud.cloudnative-pg.io
+{{- end }}
+{{- end }}
+{{- end }}

@@ -1,0 +1,252 @@
+# Public host of the app. The web app, the API and the Auth server (under
+# /auth/v1) share this origin.
+host: noonside.example.com
+# The origin, if it isn't https://<host> (e.g. behind a different port).
+publicUrl: ""
+
+# backend/config/<environment>_config.yml; also the Sentry environment.
+environment: prod
+
+imagePullSecrets: []
+# Annotations on the Deployments, e.g. reloader.stakater.com/auto to restart
+# them when their secrets change.
+annotations: {}
+
+api:
+  image:
+    repository: ghcr.io/chrishrb/noonside-api
+    # Defaults to the chart's appVersion (the commit CI built).
+    tag: ""
+    pullPolicy: IfNotPresent
+  # Secret with the API's secrets as env vars: SECRET_KEY, SMTP_PASSWORD,
+  # VAPID_PRIVATE_KEY, SUPABASE_SECRET_KEY (GoTrue's service_role key, see
+  # `noonside keygen gotrue`), optional ENTSOE_API_TOKEN, OPEN_METEO_API_KEY.
+  existingSecret: noonside-secret
+  # Plain env vars on top of the config file and the values below.
+  env: {}
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      memory: 512Mi
+  # Waiting for Postgres and GoTrue's auth schema before migrating.
+  migrateWait: 10m
+  podAnnotations: {}
+
+web:
+  image:
+    repository: ghcr.io/chrishrb/noonside-web
+    # Defaults to the chart's appVersion.
+    tag: ""
+    pullPolicy: IfNotPresent
+  replicas: 2
+  # Extra hosts for the CSP's connect-src (the API and GoTrue share the origin).
+  cspConnectSrc: ""
+  resources:
+    requests:
+      cpu: 10m
+      memory: 16Mi
+    limits:
+      memory: 64Mi
+  podAnnotations: {}
+
+# Email for the API and GoTrue. An empty host disables the API's emails (GoTrue
+# then can't send password resets). Passwords: SMTP_PASSWORD in
+# api.existingSecret, GOTRUE_SMTP_PASS in auth.existingSecret.
+smtp:
+  host: ""
+  port: 587
+  # starttls | tls | opportunistic | none (the API; GoTrue negotiates itself)
+  tls: starttls
+  user: ""
+  from: ""
+  fromName: noonside
+
+# Web Push: the public half of `noonside keygen vapid` (VAPID_PRIVATE_KEY goes
+# into api.existingSecret). Empty keeps push notifications off.
+vapidPublicKey: ""
+
+# Origin of the landing site (landing/), the only target of the waitlist
+# forms' redirects. Empty disables the waitlist endpoints.
+landingUrl: ""
+
+# Proxies in front of the API that append to X-Forwarded-For (the gateway).
+trustedProxyHops: 1
+rateLimit:
+  enabled: true
+
+# Error reporting and tracing (Sentry or a compatible server). The DSNs are
+# not secret. The web app's events go through the API (/api/v1/diag), so the
+# browser never talks to Sentry directly.
+sentry:
+  enabled: false
+  # Defaults to `environment`.
+  environment: ""
+  api:
+    dsn: ""
+    tracesSampleRate: 0.1
+    # Scheduler jobs and data source runs (every minute).
+    jobTracesSampleRate: 0.01
+  web:
+    dsn: ""
+    tracesSampleRate: 0.1
+    # Session replays of sessions with an error.
+    replaysOnErrorSampleRate: 1
+
+# Uploaded pictures (MEDIA_DIR). The volume is ReadWriteOnce: the API runs as
+# one replica and is replaced with the Recreate strategy.
+media:
+  size: 2Gi
+  storageClass: ""
+  # Use an existing claim instead of creating one.
+  existingClaim: ""
+
+auth:
+  image:
+    # Keep in sync with compose.yaml.
+    repository: supabase/gotrue
+    tag: v2.196.0
+    pullPolicy: IfNotPresent
+  # Secret with GOTRUE_JWT_KEYS, GOTRUE_JWT_SECRET (`noonside keygen gotrue`)
+  # and GOTRUE_SMTP_PASS.
+  existingSecret: noonside-auth
+  passwordMinLength: 10
+  jwtExpSeconds: 3600
+  rateLimits:
+    # Emails per hour (all users): recovery links. Keep it below your SMTP
+    # provider's limits.
+    emailSent: 30
+    tokenRefresh: 150
+    verify: 30
+    otp: 30
+  # Extra GOTRUE_* env vars.
+  env: {}
+  resources:
+    requests:
+      cpu: 20m
+      memory: 32Mi
+    limits:
+      memory: 128Mi
+
+postgres:
+  # A CloudNativePG cluster for the app; the operator (and, for backups, the
+  # barman-cloud plugin) must be installed. The API and its migrations
+  # connect as the superuser, GoTrue as supabase_auth_admin.
+  enabled: true
+  instances: 1
+  imageName: ghcr.io/cloudnative-pg/postgresql:17.6
+  database: noonside
+  storage:
+    size: 10Gi
+    storageClass: ""
+  # kubernetes.io/basic-auth secret with username supabase_auth_admin and a
+  # URL-safe password (it goes into GoTrue's database URL).
+  authRoleSecret: noonside-pg-auth
+  parameters: {}
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 1Gi
+  monitoring: true
+  # Backups to S3 or an S3-compatible store (barman-cloud plugin).
+  backup:
+    enabled: false
+    # Continuous WAL archiving (point-in-time recovery); off leaves only the
+    # scheduled base backups.
+    walArchiving: true
+    s3:
+      destinationPath: ""   # s3://<bucket>/<prefix>
+      endpointURL: ""       # empty for AWS S3
+      credentials:
+        # Secret with the access key (and the region, if regionKey is set).
+        existingSecret: ""
+        accessKeyIdKey: ACCESS_KEY_ID
+        secretAccessKeyKey: ACCESS_SECRET_KEY
+        regionKey: ""
+    compression: gzip
+    retentionPolicy: 30d
+    # Base backups, six fields (seconds first); empty: none.
+    schedule: "0 0 3 * * *"
+    # Also take one right after the ScheduledBackup is created.
+    immediate: true
+
+# Only with postgres.enabled=false: an external Postgres.
+externalDatabase:
+  host: ""
+  port: 5432
+  database: noonside
+  # Secret with username/password of the app's role and of supabase_auth_admin.
+  secretName: ""
+  authSecretName: ""
+  sslmode: require
+
+route:
+  enabled: false
+  # Gateway listener(s), e.g. {name: external, namespace: networking, sectionName: https-noonside}.
+  parentRefs: []
+  # Extra hostnames that redirect (301) to host, e.g. a former domain.
+  redirectHostnames: []
+  redirectParentRefs: []
+
+# Hosted FTP (data source kind solarlog_hosted): an SFTPGo server where the API
+# creates one upload account per data source, for loggers that can only push
+# over FTP (Solar-Log). Uploads are imported right away (an SFTPGo event rule
+# calls the API). Off: the kind isn't offered.
+hostedFtp:
+  enabled: false
+  image:
+    repository: drakkan/sftpgo
+    tag: v2.6.6-alpine
+    pullPolicy: IfNotPresent
+  # Host name the devices upload to (shown with the credentials), pointing at
+  # the public Service below.
+  publicHost: ""
+  admin:
+    username: noonside
+    # Secret with the admin password, used by SFTPGo and the API.
+    existingSecret: ""
+    passwordKey: SFTPGO_ADMIN_PASSWORD
+  ftp:
+    port: 21
+    # Passive data ports, published 1:1 by the public Service.
+    passivePorts:
+      start: 50000
+      end: 50019
+    # The public IP announced for passive mode (behind a LoadBalancer).
+    forcePassiveIP: ""
+    tls:
+      # kubernetes.io/tls secret: also offers explicit FTPS (AUTH TLS).
+      secretName: ""
+  sftp:
+    # Also publish SFTP (port 2022 in the pod) for devices that can do it.
+    external: false
+    port: 22
+  # Secret with an SSH host key (key id_ed25519); otherwise SFTPGo generates
+  # one on its volume.
+  hostKeySecret: ""
+  # Per account: quota, and days imported minute files are kept.
+  quotaMB: 200
+  retentionDays: 14
+  # Accounts across all systems; 0 is unlimited.
+  maxAccounts: 0
+  service:
+    type: LoadBalancer
+    annotations: {}
+    loadBalancerIP: ""
+    # Local keeps the client's IP (SFTPGo's own login rate limits).
+    externalTrafficPolicy: Local
+  storage:
+    size: 5Gi
+    storageClass: ""
+    existingClaim: ""
+  # Extra SFTPGO_* env vars.
+  env: {}
+  resources:
+    requests:
+      cpu: 20m
+      memory: 64Mi
+    limits:
+      memory: 256Mi

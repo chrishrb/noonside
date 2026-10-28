@@ -1,0 +1,15 @@
+# `mise run dev:stack` restarts the API with air when Go code or config changes.
+root = "."
+tmp_dir = "tmp"
+
+[build]
+cmd = "go build -o ./tmp/noonside ."
+entrypoint = ["./tmp/noonside", "serve"]
+include_ext = ["go", "yml", "yaml", "html", "txt"]
+exclude_dir = ["tmp", "dist", "bin"]
+exclude_regex = ["_test\\.go$"]
+delay = 500
+kill_delay = "1s"
+
+[log]
+main_only = true

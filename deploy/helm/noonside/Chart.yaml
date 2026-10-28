@@ -1,0 +1,13 @@
+apiVersion: v2
+name: noonside
+description: noonside PV monitoring — API, web app, the Auth server (GoTrue), a CloudNativePG Postgres cluster and optional hosted FTP (SFTPGo)
+type: application
+# CI publishes every main build as 0.1.<run number> (appVersion = commit).
+version: 0.1.0
+appVersion: "dev"
+kubeVersion: ">=1.29.0-0"
+home: https://github.com/chrishrb/noonside
+sources:
+  - https://github.com/chrishrb/noonside
+annotations:
+  artifacthub.io/license: AGPL-3.0-only

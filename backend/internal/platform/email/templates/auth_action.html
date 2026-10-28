@@ -1,0 +1,9 @@
+{{define "content"}}
+{{template "heading" .Data.Title}}
+{{template "paragraph" .Data.Intro}}
+{{template "button" (map "URL" .Data.URL "Label" .Data.ButtonLabel)}}
+<p style="margin:0; font-size:14px; line-height:22px; color:#78716c;">{{.Data.Note}}</p>
+{{template "fallback-link" .Data.URL}}
+{{end}}
+
+{{define "footer"}}You received this email because of a request for your {{.App.Name}} account.{{end}}

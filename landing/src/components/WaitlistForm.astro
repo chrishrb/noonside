@@ -1,0 +1,36 @@
+---
+// Sign-up for the waitlist. A plain form posting to the API, which answers
+// with a redirect back to /warteliste/…; no JavaScript. The consent text
+// belongs to waitlistConsentVersion in backend/internal/api/waitlist.go:
+// bump that when changing it.
+import { API_URL, type Plan } from '../lib/site';
+
+interface Props { plan?: Plan; id?: string; button?: string }
+const { plan, id = 'waitlist', button = 'Auf die Warteliste' } = Astro.props;
+---
+<form class="form-card" method="post" action={`${API_URL}/waitlist`}>
+  <div class="field">
+    <label for={`${id}-email`}>E-Mail-Adresse</label>
+    <input class="input" id={`${id}-email`} name="email" type="email" autocomplete="email" required maxlength="254" placeholder="sie@beispiel.de" />
+  </div>
+  <div class="field">
+    <label for={`${id}-role`}>Was beschreibt Sie am besten?</label>
+    <select class="select" id={`${id}-role`} name="role">
+      <option value="operator">Ich betreibe eine PV-Anlage</option>
+      <option value="home_assistant">Ich nutze Home Assistant</option>
+      <option value="installer">Ich betreue Anlagen (Installateur)</option>
+      <option value="other">Etwas anderes</option>
+    </select>
+  </div>
+  {plan && <input type="hidden" name="plan" value={plan} />}
+  <div class="hp" aria-hidden="true">
+    <label for={`${id}-website`}>Website (bitte leer lassen)</label>
+    <input id={`${id}-website`} name="website" type="text" tabindex="-1" autocomplete="off" />
+  </div>
+  <label class="consent">
+    <input type="checkbox" name="consent" value="yes" required />
+    <span>Ich möchte per E-Mail erfahren, wann die Beta startet und noonside verfügbar ist. Die Einwilligung kann ich jederzeit widerrufen, mit einem Klick in jeder E-Mail. Details in der <a href="/datenschutz/">Datenschutzerklärung</a>.</span>
+  </label>
+  <button class="btn btn-primary btn-block" type="submit">{button}</button>
+  <p class="form-foot">Sie bekommen eine E-Mail zur Bestätigung (Double-Opt-In).</p>
+</form>

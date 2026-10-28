@@ -1,0 +1,32 @@
+---
+// An iPhone lock screen with noonside push notifications, drawn in CSS
+// (no screenshot): the native lock screen can't be captured from the app.
+// Texts follow the server's alert and forecast texts (backend/internal/alerts).
+import IPhone from './IPhone.astro';
+import Logo from './Logo.astro';
+
+interface Note { title: string; body: string; when: string }
+interface Props { notes: Note[]; date: string; time?: string; label: string }
+const { notes, date, time = '9:41', label } = Astro.props;
+---
+<figure class="lockscreen">
+  <IPhone lock>
+    <div class="lock" aria-hidden="true">
+      <p class="lock-date">{date}</p>
+      <p class="lock-time">{time}</p>
+      <div class="lock-notes">
+        {notes.map((n) => (
+          <div class="lock-note">
+            <span class="lock-app"><Logo size={38} /></span>
+            <div class="lock-text">
+              <p class="lock-head"><strong>noonside</strong><span>{n.when}</span></p>
+              <p class="lock-title">{n.title}</p>
+              <p class="lock-body">{n.body}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  </IPhone>
+  <figcaption class="sr-only">{label}</figcaption>
+</figure>

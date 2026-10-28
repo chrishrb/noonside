@@ -1,0 +1,14 @@
+---
+// Unsubscribe link from the emails; public/scripts/token.js fills the token.
+import Status from '../../layouts/Status.astro';
+import { API_URL, operator } from '../../lib/site';
+---
+<Status title="Von der Warteliste abmelden" icon="mail">
+  <p>Wir löschen Ihre E-Mail-Adresse und schreiben Ihnen nicht mehr.</p>
+  <form class="actions" method="post" action={`${API_URL}/waitlist/unsubscribe`} data-token>
+    <input type="hidden" name="token" />
+    <button class="btn btn-primary" type="submit" disabled>Abmelden und Adresse löschen</button>
+  </form>
+  <p class="notice" id="no-token" hidden>Zum Abmelden nutzen Sie bitte den Link aus einer unserer E-Mails. Oder schreiben Sie uns an <a href={`mailto:${operator.email}`}>{operator.email}</a>, dann löschen wir Ihre Adresse von Hand.</p>
+  <script slot="end" src="/scripts/token.js" is:inline defer></script>
+</Status>

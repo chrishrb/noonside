@@ -1,0 +1,12 @@
+{{define "content"}}Fast geschafft
+
+Danke für Ihr Interesse an {{.App.Name}}, dem herstellerunabhängigen Monitoring für Photovoltaikanlagen.
+Bitte bestätigen Sie, dass Sie auf die Warteliste möchten. Wir schreiben Ihnen, sobald die Beta startet und noonside verfügbar ist, sonst nichts.
+
+Anmeldung bestätigen:
+{{.Data.ConfirmURL}}
+
+Der Link gilt bis zum {{.Data.ExpiresDate}}. Sie haben sich nicht angemeldet? Dann ignorieren Sie diese E-Mail einfach; ohne Bestätigung löschen wir Ihre Adresse nach 7 Tagen.{{end}}
+
+{{define "footer"}}Sie erhalten diese E-Mail, weil diese Adresse auf der Warteliste von {{.App.Name}} eingetragen wurde.
+Abmelden: {{.Data.UnsubscribeURL}}{{end}}

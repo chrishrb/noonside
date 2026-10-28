@@ -1,0 +1,244 @@
+[tools]
+air = "1.65"
+go = "{{ exec(command=`awk '/^go / {print $2}' backend/go.mod`) }}"
+golangci-lint = "2.11"
+pre-commit = "latest"
+helm = "3"
+kubeconform = "0.7"
+node = "22"
+pnpm = "12"
+actionlint = "1.7"
+
+# Local-only values of compose.yaml (never used anywhere else): the GoTrue
+# service_role key signed with its dev key, the database URL and the SFTPGo
+# admin password.
+[vars]
+dev_secret_key = "eyJhbGciOiJFUzI1NiIsImtpZCI6IjhjY2ZhN2UyLTcxMmYtNGM4Ni1iNTRjLTBkNzM0MDEwYmNkZiIsInR5cCI6IkpXVCJ9.eyJleHAiOjMzNjk5ODY1MTUsImlhdCI6MTc5MzE4NjUxNSwiaXNzIjoibm9vbnNpZGUiLCJyb2xlIjoic2VydmljZV9yb2xlIn0.Csc_uxIl7KPLALek-350lMFsdPP1-hPbgUAqz3BcgXQvu3gIeanFKah5UE_oYLkm-n9XLJCjuVYrKwLl2ddosQ"
+dev_database_url = "postgresql://postgres:postgres@127.0.0.1:54322/postgres"
+dev_sftpgo_password = "noonside-dev-sftpgo"
+
+[tasks.build]
+description = 'Build backend/bin/noonside'
+dir = "backend"
+run = [
+  "go build -o bin/noonside .",
+]
+
+[tasks."test"]
+description = 'Run tests'
+dir = "backend"
+run = [
+    'go test ./...',
+]
+
+[tasks."test:integration"]
+description = 'Run integration tests against the local stack (compose.yaml; `mise run db:up`)'
+env = { ENVIRONMENT = "dev", TEST_DATABASE_URL = "{{vars.dev_database_url}}", TEST_SUPABASE_URL = "http://localhost:5173", TEST_AUTH_URL = "http://127.0.0.1:9999", TEST_SUPABASE_SECRET_KEY = "{{vars.dev_secret_key}}", TEST_SFTPGO_URL = "http://127.0.0.1:8090", TEST_SFTPGO_ADMIN_PASSWORD = "{{vars.dev_sftpgo_password}}", TEST_SFTPGO_SFTP_ADDR = "127.0.0.1:2022" }
+run = [
+    'go -C backend run . migrate',
+    'go -C backend test -count=1 -tags=integration ./internal/integration/...',
+]
+
+[tasks.dev]
+description = 'Run the server against the local stack (compose.yaml; `mise run db:up`)'
+env = { ENVIRONMENT = "dev", SUPABASE_SECRET_KEY = "{{vars.dev_secret_key}}", SFTPGO_ADMIN_PASSWORD = "{{vars.dev_sftpgo_password}}" }
+run = ['go -C backend run . serve']
+
+[tasks."dev:stack"]
+description = 'Local stack (compose.yaml, migrated), the API with reload on changes (air) and Vite; Ctrl-C stops both'
+env = { ENVIRONMENT = "dev", SUPABASE_SECRET_KEY = "{{vars.dev_secret_key}}", SFTPGO_ADMIN_PASSWORD = "{{vars.dev_sftpgo_password}}" }
+run = '''
+set -eu
+for port in 8080 5173; do
+  if lsof -iTCP:$port -sTCP:LISTEN -n -P >/dev/null 2>&1; then
+    echo "port $port is already in use (an older dev server?):" >&2
+    lsof -iTCP:$port -sTCP:LISTEN -n -P >&2
+    exit 1
+  fi
+done
+docker compose up -d --wait
+go -C backend run . migrate
+# web/.env.local from the Supabase CLI days would point the app elsewhere.
+if [ -f web/.env.local ] && grep -q '^VITE_SUPABASE_' web/.env.local; then
+  grep -v '^VITE_SUPABASE_' web/.env.local > web/.env.local.tmp || true
+  mv web/.env.local.tmp web/.env.local
+  echo "removed VITE_SUPABASE_* from web/.env.local" >&2
+fi
+trap 'kill 0' EXIT INT TERM
+(cd backend && air) &
+pnpm -C web dev &
+echo "API :8080 (reloads on Go changes), web http://localhost:5173 — sign in as dev@noonside.local / noonside-dev-pw"
+wait
+'''
+
+[tasks."db:up"]
+description = 'Start the local stack (compose.yaml: Postgres :54322, GoTrue :9999, Mailpit :54324, SFTPGo :8090) and wait until it is healthy'
+run = ['docker compose up -d --wait']
+
+[tasks."db:down"]
+description = 'Stop the local stack (keeps the data)'
+run = ['docker compose down']
+
+[tasks."db:migrate"]
+description = 'Apply backend/db/migrations to the local database'
+env = { ENVIRONMENT = "dev" }
+run = ['go -C backend run . migrate']
+
+[tasks."db:migration:new"]
+description = 'Create backend/db/migrations/<UTC timestamp>_NAME.sql'
+usage = '''
+arg "<name>" help="snake_case name of the migration"
+'''
+run = '''
+set -eu
+f="backend/db/migrations/$(date -u +%Y%m%d%H%M%S)_{{usage.name}}.sql"
+touch "$f"
+echo "$f"
+'''
+
+[tasks."db:reset"]
+description = 'Wipe the LOCAL database: re-create it (compose volume), apply backend/db/migrations and backend/db/seed.sql (never touches production)'
+env = { ENVIRONMENT = "dev" }
+run = [
+    'docker compose rm -sfv postgres auth',
+    'docker volume rm -f noonside_pgdata',
+    'docker compose up -d --wait',
+    'go -C backend run . migrate',
+    'psql "{{vars.dev_database_url}}" -v ON_ERROR_STOP=1 -q -f backend/db/seed.sql',
+]
+
+[tasks."dev:seed"]
+description = 'Apply backend/db/seed.sql (dev accounts, demo systems) to the running local database'
+run = ['psql "{{vars.dev_database_url}}" -v ON_ERROR_STOP=1 -q -f backend/db/seed.sql']
+
+[tasks.generate]
+description = 'Generate code (Go server from api.yaml, TypeScript client types)'
+run = [
+    'go -C backend generate ./...',
+    'go -C backend mod tidy',
+    'pnpm -C web generate',
+]
+
+[tasks."generate:check"]
+description = 'Fail if generated code is out of date'
+depends = ['generate']
+run = [
+    'git diff --exit-code -- backend/internal/platform/httpapi/generated web/src/api/gen',
+]
+
+[tasks.format]
+description = 'Format'
+dir = "backend"
+run = [
+    'go fmt ./...',
+]
+
+[tasks.lint]
+description = 'Lint'
+dir = "backend"
+run = [
+    'golangci-lint run',
+]
+
+[tasks."lint:actions"]
+description = 'Lint the GitHub workflows and composite actions (actionlint, with shellcheck if installed)'
+run = ['actionlint']
+
+[tasks."web:install"]
+description = 'Install web dependencies'
+run = ['pnpm -C web install']
+
+[tasks."web:dev"]
+description = 'Run the web app on :5173 (proxies /api to :8080)'
+run = ['pnpm -C web dev']
+
+[tasks."web:build"]
+description = 'Build the web app into web/dist'
+run = ['pnpm -C web build']
+
+[tasks."web:test"]
+description = 'Web unit tests'
+run = ['pnpm -C web test']
+
+[tasks."web:icons"]
+description = 'Regenerate the PWA icons in web/public from favicon.svg'
+run = ['pnpm -C web exec pwa-assets-generator']
+
+[tasks."web:lint"]
+description = 'Typecheck and lint the web app'
+run = ['pnpm -C web typecheck', 'pnpm -C web lint']
+
+[tasks."web:e2e"]
+description = 'Playwright: smoke test and layout checks on all viewports (needs a running stack, e.g. `mise run dev:stack`)'
+run = ['pnpm -C web e2e']
+
+[tasks."web:shots"]
+description = 'Layout checks on desktop, dark, tablet, phone and phone (DE) with screenshots in web/e2e/screenshots (needs a running stack)'
+run = ['pnpm -C web e2e layout', 'echo "screenshots: web/e2e/screenshots/<project>/<page>.png"']
+
+[tasks."landing:install"]
+description = 'Install landing site dependencies'
+run = ['pnpm -C landing install']
+
+[tasks."landing:dev"]
+description = 'Landing site on :4321 (its forms post to the API through Vite on :5173, so run dev:stack too)'
+run = ['pnpm -C landing dev']
+
+[tasks."landing:build"]
+description = 'Typecheck and build the landing site into landing/dist'
+run = ['pnpm -C landing build']
+
+[tasks."landing:screens"]
+description = 'German app screenshots for the landing site into landing/src/assets/screens (needs a running stack; re-seeds the dev data first)'
+depends = ['dev:seed']
+run = ['LANDING_SHOTS=1 pnpm -C web exec playwright test landing-shots --project="landing-*"']
+
+[tasks."docs:screens"]
+description = 'README screenshots into docs/screenshots (needs a running stack; re-seeds the dev data first)'
+depends = ['dev:seed']
+run = ['README_SHOTS=1 pnpm -C web exec playwright test readme-shots --project="readme-*"']
+
+[tasks."landing:build:prod"]
+description = 'Build the landing site for production (LANDING_URL, PUBLIC_APP_URL, PUBLIC_DEMO_URL and the operator from landing/.env.production)'
+run = '''
+set -eu
+set -a; . landing/.env.production; set +a
+pnpm -C landing build
+'''
+
+[tasks."web:sourcemaps"]
+description = 'Upload the source maps of a web build to Sentry, then delete them (SENTRY_AUTH_TOKEN, SENTRY_ORG, SENTRY_PROJECT, SENTRY_URL)'
+usage = '''
+arg "[dir]" default="web/dist" help="Web build with source maps"
+'''
+run = '''
+set -eu
+dir="$(cd "{{usage.dir}}" && pwd)"
+if [ -n "${SENTRY_ORG:-}" ]; then
+  # Matched to the bundles by the debug IDs injected in web/Dockerfile.
+  SENTRY_URL="${SENTRY_URL:-https://sentry.io/}" SENTRY_PROJECT="${SENTRY_PROJECT:-noonside-web}" \
+    pnpm -C web exec sentry-cli sourcemaps upload --release "${APP_VERSION:-$(git rev-parse HEAD)}" "$dir"
+fi
+find "$dir" -name '*.map' -delete
+'''
+
+[tasks."docker:build"]
+description = 'Build the container images noonside-api:dev and noonside-web:dev for the local platform'
+run = [
+    'docker build -t noonside-api:dev --build-arg APP_VERSION="$(git rev-parse HEAD)" backend',
+    'docker build -t noonside-web:dev --build-arg APP_VERSION="$(git rev-parse HEAD)" web',
+]
+
+[tasks."chart:lint"]
+description = 'Lint the Helm chart and validate its manifests with the default and the test values (kubeconform)'
+run = '''
+set -eu
+helm lint deploy/helm/noonside
+helm lint deploy/helm/noonside -f deploy/helm/noonside/ci/test-values.yaml
+for values in "" "-f deploy/helm/noonside/ci/test-values.yaml"; do
+  # shellcheck disable=SC2086
+  helm template noonside deploy/helm/noonside $values | kubeconform -strict -summary -ignore-missing-schemas \
+    -schema-location default \
+    -schema-location {% raw %}'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json'{% endraw %}
+done
+'''

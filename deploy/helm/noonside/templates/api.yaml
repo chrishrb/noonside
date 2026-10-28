@@ -1,0 +1,181 @@
+{{- $origin := include "noonside.origin" . -}}
+{{- $sentry := .Values.sentry -}}
+{{- $ftp := .Values.hostedFtp -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "noonside.apiName" . }}
+  labels:
+    {{- include "noonside.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+  {{- with .Values.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  # One replica: the media volume is ReadWriteOnce. Recreate also makes the
+  # migrations (init container) run before the new version serves.
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "noonside.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: api
+  template:
+    metadata:
+      labels:
+        {{- include "noonside.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: api
+      {{- with .Values.api.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10000
+        runAsGroup: 10000
+        fsGroup: 10000
+        seccompProfile:
+          type: RuntimeDefault
+      enableServiceLinks: false
+      initContainers:
+        # Applies backend/db/migrations once Postgres is up and GoTrue has created
+        # auth.users (the first migration references it).
+        - name: migrate
+          image: {{ include "noonside.apiImage" . }}
+          imagePullPolicy: {{ .Values.api.image.pullPolicy }}
+          args: ["migrate", "--wait", {{ .Values.api.migrateWait | quote }}]
+          env: &env
+            - name: ENVIRONMENT
+              value: {{ .Values.environment | quote }}
+            - name: PUBLIC_URL
+              value: {{ $origin | quote }}
+            # GoTrue is served under /auth/v1 of the same origin (HTTPRoute).
+            - name: SUPABASE_URL
+              value: {{ $origin | quote }}
+            - name: SUPABASE_INTERNAL_URL
+              value: {{ printf "http://%s:9999" (include "noonside.authName" .) | quote }}
+            {{- include "noonside.dbEnv" . | nindent 12 }}
+            - name: LANDING_URL
+              value: {{ .Values.landingUrl | quote }}
+            - name: TRUSTED_PROXY_HOPS
+              value: {{ .Values.trustedProxyHops | quote }}
+            - name: RATE_LIMIT_ENABLED
+              value: {{ .Values.rateLimit.enabled | quote }}
+            - name: VAPID_PUBLIC_KEY
+              value: {{ .Values.vapidPublicKey | quote }}
+            # Email; the password is SMTP_PASSWORD in api.existingSecret.
+            - name: SMTP_HOST
+              value: {{ .Values.smtp.host | quote }}
+            - name: SMTP_PORT
+              value: {{ .Values.smtp.port | quote }}
+            - name: SMTP_TLS
+              value: {{ .Values.smtp.tls | quote }}
+            - name: SMTP_USERNAME
+              value: {{ .Values.smtp.user | quote }}
+            - name: MAIL_FROM
+              value: {{ .Values.smtp.from | quote }}
+            - name: MAIL_FROM_NAME
+              value: {{ .Values.smtp.fromName | quote }}
+            {{- if $sentry.enabled }}
+            - name: SENTRY_DSN
+              value: {{ $sentry.api.dsn | quote }}
+            - name: SENTRY_ENVIRONMENT
+              value: {{ default .Values.environment $sentry.environment | quote }}
+            - name: SENTRY_TRACES_SAMPLE_RATE
+              value: {{ $sentry.api.tracesSampleRate | quote }}
+            - name: SENTRY_JOB_TRACES_SAMPLE_RATE
+              value: {{ $sentry.api.jobTracesSampleRate | quote }}
+            # The web app's events go through the API (/api/v1/diag).
+            - name: SENTRY_WEB_DSN
+              value: {{ $sentry.web.dsn | quote }}
+            {{- end }}
+            {{- if $ftp.enabled }}
+            {{- include "noonside.hostedFtpEnv" . | nindent 12 }}
+            {{- end }}
+            {{- range $k, $v := .Values.api.env }}
+            - name: {{ $k }}
+              value: {{ $v | quote }}
+            {{- end }}
+          envFrom: &envFrom
+            - secretRef:
+                name: {{ required "api.existingSecret is required" .Values.api.existingSecret }}
+          securityContext:
+            {{- include "noonside.securityContext" . | nindent 12 }}
+      containers:
+        - name: api
+          image: {{ include "noonside.apiImage" . }}
+          imagePullPolicy: {{ .Values.api.image.pullPolicy }}
+          args: ["serve"]
+          env: *env
+          envFrom: *envFrom
+          ports:
+            - name: http
+              containerPort: 8080
+          startupProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 2
+            failureThreshold: 30
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 20
+          readinessProbe:
+            httpGet: { path: /readyz, port: http }
+            periodSeconds: 10
+          resources:
+            {{- toYaml .Values.api.resources | nindent 12 }}
+          securityContext:
+            {{- include "noonside.securityContext" . | nindent 12 }}
+          volumeMounts:
+            - name: media
+              mountPath: /data/media
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: media
+          persistentVolumeClaim:
+            claimName: {{ default (printf "%s-media" (include "noonside.fullname" .)) .Values.media.existingClaim }}
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "noonside.apiName" . }}
+  labels:
+    {{- include "noonside.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+spec:
+  selector:
+    {{- include "noonside.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+{{- if not .Values.media.existingClaim }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "noonside.fullname" . }}-media
+  labels:
+    {{- include "noonside.labels" . | nindent 4 }}
+  annotations:
+    # Pictures survive uninstalling the release.
+    helm.sh/resource-policy: keep
+spec:
+  accessModes: ["ReadWriteOnce"]
+  {{- with .Values.media.storageClass }}
+  storageClassName: {{ . }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.media.size }}
+{{- end }}

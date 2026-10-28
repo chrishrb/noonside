@@ -1,0 +1,11 @@
+---
+import Status from '../../layouts/Status.astro';
+import { DEMO_URL } from '../../lib/site';
+---
+<Status title="Sie stehen auf der Warteliste" icon="check" ok>
+  <p>Danke! Wir melden uns, sobald die Beta startet. Bis dahin bekommen Sie keine weiteren E-Mails von uns.</p>
+  <div class="actions">
+    <a class="btn btn-primary" href={DEMO_URL} target="_blank" rel="noopener">Live-Demo ansehen</a>
+    <a class="btn btn-secondary" href="/">Zur Startseite</a>
+  </div>
+</Status>

@@ -1,0 +1,15 @@
+---
+// Target of the link in the confirmation email. public/scripts/token.js
+// moves the token from the fragment into the form.
+import Status from '../../layouts/Status.astro';
+import { API_URL } from '../../lib/site';
+---
+<Status title="Anmeldung bestätigen" icon="mail">
+  <p>Ein Klick noch, dann stehen Sie auf der Warteliste von noonside.</p>
+  <form class="actions" method="post" action={`${API_URL}/waitlist/confirm`} data-token>
+    <input type="hidden" name="token" />
+    <button class="btn btn-primary" type="submit" disabled>Ja, ich möchte auf die Warteliste</button>
+  </form>
+  <p class="notice" id="no-token" hidden>Dieser Link ist unvollständig. Öffnen Sie bitte den Link aus der E-Mail oder kopieren Sie ihn vollständig in den Browser.</p>
+  <script slot="end" src="/scripts/token.js" is:inline defer></script>
+</Status>

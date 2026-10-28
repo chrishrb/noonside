@@ -1,0 +1,159 @@
+name: Deploy
+
+# Publishes main after CI passed: the two container images (api, web) and the
+# Helm chart go to GHCR. A GitOps tool in the cluster (e.g. a Flux
+# OCIRepository with a semver range) picks up the new chart version and rolls
+# it out; nothing here holds cluster credentials.
+#
+#   image ─> chart ─> smoke
+#
+# Optional repository variables: PUBLIC_URL (smoke test; skipped without it),
+# SENTRY_ORG, SENTRY_WEB_PROJECT, SENTRY_URL and the secret SENTRY_AUTH_TOKEN
+# (source map upload; skipped without SENTRY_ORG).
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  # The commit CI checked (or the dispatched one).
+  DEPLOY_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+  IMAGE: ghcr.io/${{ github.repository_owner }}/noonside
+  CHARTS: oci://ghcr.io/${{ github.repository_owner }}/charts
+  PUBLIC_URL: ${{ vars.PUBLIC_URL }}
+
+jobs:
+  image:
+    name: Build & push images
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.DEPLOY_SHA }}
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      # The web build with its source maps: uploaded to Sentry, never shipped.
+      - name: Web build (source maps)
+        uses: docker/build-push-action@v7
+        with:
+          context: web
+          target: web-dist
+          outputs: type=local,dest=${{ runner.temp }}/web-dist
+          build-args: &build-args |
+            APP_VERSION=${{ env.DEPLOY_SHA }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - if: vars.SENTRY_ORG != ''
+        uses: jdx/mise-action@v5
+        with:
+          install_args: node pnpm
+      - if: vars.SENTRY_ORG != ''
+        uses: ./.github/actions/pnpm-cache
+      - name: Upload source maps to Sentry
+        if: vars.SENTRY_ORG != ''
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ vars.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ vars.SENTRY_WEB_PROJECT }}
+          SENTRY_URL: ${{ vars.SENTRY_URL }}
+          APP_VERSION: ${{ env.DEPLOY_SHA }}
+        run: |
+          mise run web:install
+          mise run web:sourcemaps "$RUNNER_TEMP/web-dist"
+      # Cross-compiled (no emulation): the web app and Go build on the runner's platform.
+      - name: API image
+        uses: docker/build-push-action@v7
+        with:
+          context: backend
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ env.IMAGE }}-api:${{ env.DEPLOY_SHA }}
+          build-args: *build-args
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Web image
+        uses: docker/build-push-action@v7
+        with:
+          context: web
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ env.IMAGE }}-web:${{ env.DEPLOY_SHA }}
+          build-args: *build-args
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  chart:
+    name: Publish Helm chart
+    needs: image
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      version: ${{ steps.package.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.DEPLOY_SHA }}
+      - uses: jdx/mise-action@v5
+        with:
+          install_args: helm kubeconform
+      - run: mise run chart:lint
+      # Every deploy is a new chart version pinned to its image, so Flux
+      # (semver range) rolls out exactly what was built.
+      - id: package
+        run: |
+          version="0.1.${GITHUB_RUN_NUMBER}"
+          helm package deploy/helm/noonside --version "$version" --app-version "$DEPLOY_SHA" -d "$RUNNER_TEMP/chart"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          echo "$GH_TOKEN" | helm registry login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          helm push "$RUNNER_TEMP"/chart/noonside-*.tgz "$CHARTS"
+
+  # Flux checks the chart every few minutes; wait until the new release
+  # answers, then check the API and the Auth server behind the same origin.
+  smoke:
+    name: Smoke test
+    needs: chart
+    if: vars.PUBLIC_URL != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Wait for the new release
+        run: |
+          for _ in $(seq 1 90); do
+            rel="$(curl -fsS -o /dev/null -D - "$PUBLIC_URL/healthz" | tr -d '\r' | awk -F': ' 'tolower($1)=="noonside-release" {print $2}' || true)"
+            if [ "$rel" = "$DEPLOY_SHA" ]; then echo "release $rel is live"; exit 0; fi
+            sleep 10
+          done
+          echo "release $DEPLOY_SHA did not go live (serving: ${rel:-unknown})" >&2
+          exit 1
+      - name: Check
+        run: |
+          curl -fsS "$PUBLIC_URL/readyz"
+          curl -fsS "$PUBLIC_URL/" | grep -q '<div id="root">'
+          curl -fsS -o /dev/null "$PUBLIC_URL/config.js"
+          test "$(curl -s -o /dev/null -w '%{http_code}' "$PUBLIC_URL/api/v1/me")" = 401
+          curl -fsS -o /dev/null "$PUBLIC_URL/auth/v1/health"
+          curl -fsS -o /dev/null "$PUBLIC_URL/auth/v1/.well-known/jwks.json"

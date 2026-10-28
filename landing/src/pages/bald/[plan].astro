@@ -1,0 +1,31 @@
+---
+// "Coming soon" after a pricing button (fake door).
+import Base from '../../layouts/Base.astro';
+import WaitlistForm from '../../components/WaitlistForm.astro';
+import { DEMO_URL, plans, type Plan } from '../../lib/site';
+
+export function getStaticPaths() {
+  return (Object.keys(plans) as Plan[]).map((plan) => ({ params: { plan } }));
+}
+
+const plan = Astro.params.plan as Plan;
+const lead = {
+  free: 'Den kostenlosen Plan gibt es, sobald noonside öffnet.',
+  pro: 'Pro gibt es, sobald noonside öffnet.',
+  installer: 'Das Angebot für Installateure stellen wir gerade zusammen.',
+}[plan];
+---
+<Base title={`${plans[plan].name}: bald verfügbar`} description="noonside ist noch nicht offen. Tragen Sie sich auf die Warteliste ein." noindex>
+  <section class="page">
+    <div class="wrap signup">
+      <div class="section-head">
+        <span class="eyebrow">Bald verfügbar</span>
+        <h1>Danke für Ihr Interesse!</h1>
+        <p>{lead} Noch nehmen wir keine Anmeldungen an, denn wir bereiten eine kleine Beta mit echten Anlagen vor.</p>
+        <p>Tragen Sie sich ein, dann melden wir uns als Erstes bei Ihnen. {plan === 'installer' ? 'Gern sprechen wir auch persönlich darüber, was Sie für Ihre Kunden brauchen.' : 'Während der Beta ist noonside kostenlos.'}</p>
+        <p><a href={DEMO_URL} target="_blank" rel="noopener">Live-Demo ansehen</a> · <a href="/">Zurück zur Startseite</a></p>
+      </div>
+      <WaitlistForm plan={plan} id={`waitlist-${plan}`} />
+    </div>
+  </section>
+</Base>

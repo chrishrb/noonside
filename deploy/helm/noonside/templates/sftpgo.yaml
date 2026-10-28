@@ -1,0 +1,240 @@
+{{- if .Values.hostedFtp.enabled }}
+{{- $ftp := .Values.hostedFtp -}}
+{{- $name := include "noonside.sftpgoName" . -}}
+{{- $passive := untilStep (int $ftp.ftp.passivePorts.start) (int (add $ftp.ftp.passivePorts.end 1)) 1 -}}
+# Hosted FTP (data source kind solarlog_hosted): SFTPGo holds one account per
+# data source, created by the API through its REST API. Devices upload over
+# FTP (FTPS with hostedFtp.ftp.tls); the API reads the files over SFTP and is
+# told about each upload by an event rule (POST /api/v1/hooks/hosted-ftp).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "noonside.labels" . | nindent 4 }}
+    app.kubernetes.io/component: sftpgo
+  {{- with .Values.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  # SQLite and the uploads live on a ReadWriteOnce volume.
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "noonside.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: sftpgo
+  template:
+    metadata:
+      labels:
+        {{- include "noonside.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: sftpgo
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      enableServiceLinks: false
+      containers:
+        - name: sftpgo
+          image: "{{ $ftp.image.repository }}:{{ $ftp.image.tag }}"
+          imagePullPolicy: {{ $ftp.image.pullPolicy }}
+          env:
+            - name: SFTPGO_DATA_PROVIDER__DRIVER
+              value: sqlite
+            - name: SFTPGO_DATA_PROVIDER__NAME
+              value: /var/lib/sftpgo/sftpgo.db
+            - name: SFTPGO_DATA_PROVIDER__USERS_BASE_DIR
+              value: /srv/sftpgo/data
+            # The API's admin account (HOSTED_FTP_ADMIN_USER, SFTPGO_ADMIN_PASSWORD).
+            - name: SFTPGO_DATA_PROVIDER__CREATE_DEFAULT_ADMIN
+              value: "true"
+            - name: SFTPGO_DEFAULT_ADMIN_USERNAME
+              value: {{ $ftp.admin.username | quote }}
+            - name: SFTPGO_DEFAULT_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ required "hostedFtp.admin.existingSecret is required" $ftp.admin.existingSecret }}
+                  key: {{ $ftp.admin.passwordKey }}
+            # Upload quotas (quota_size of each account).
+            - name: SFTPGO_COMMON__TRACK_QUOTA
+              value: "2"
+            # FTP for the devices; the passive ports are published 1:1.
+            - name: SFTPGO_FTPD__BINDINGS__0__PORT
+              value: "2121"
+            {{- with $ftp.ftp.forcePassiveIP }}
+            - name: SFTPGO_FTPD__BINDINGS__0__FORCE_PASSIVE_IP
+              value: {{ . | quote }}
+            {{- end }}
+            - name: SFTPGO_FTPD__PASSIVE_PORT_RANGE__START
+              value: {{ $ftp.ftp.passivePorts.start | quote }}
+            - name: SFTPGO_FTPD__PASSIVE_PORT_RANGE__END
+              value: {{ $ftp.ftp.passivePorts.end | quote }}
+            {{- if $ftp.ftp.tls.secretName }}
+            # Explicit FTPS (AUTH TLS) next to plain FTP; Solar-Logs often can't do TLS.
+            - name: SFTPGO_FTPD__CERTIFICATE_FILE
+              value: /etc/sftpgo/tls/tls.crt
+            - name: SFTPGO_FTPD__CERTIFICATE_KEY_FILE
+              value: /etc/sftpgo/tls/tls.key
+            - name: SFTPGO_FTPD__BINDINGS__0__TLS_MODE
+              value: "0"
+            {{- end }}
+            # SFTP for the API (in-cluster only, unless hostedFtp.sftp.external).
+            - name: SFTPGO_SFTPD__BINDINGS__0__PORT
+              value: "2022"
+            {{- if $ftp.hostKeySecret }}
+            - name: SFTPGO_SFTPD__HOST_KEYS
+              value: /etc/sftpgo/hostkeys/id_ed25519
+            {{- end }}
+            # REST API for the API; no web client for the accounts.
+            - name: SFTPGO_HTTPD__BINDINGS__0__PORT
+              value: "8080"
+            - name: SFTPGO_HTTPD__BINDINGS__0__ENABLE_WEB_CLIENT
+              value: "false"
+            - name: SFTPGO_WEBDAVD__BINDINGS__0__PORT
+              value: "0"
+            {{- range $k, $v := $ftp.env }}
+            - name: {{ $k }}
+              value: {{ $v | quote }}
+            {{- end }}
+          ports:
+            - name: ftp
+              containerPort: 2121
+            - name: sftp
+              containerPort: 2022
+            - name: http
+              containerPort: 8080
+            {{- range $passive }}
+            - name: {{ printf "pasv-%d" . }}
+              containerPort: {{ . }}
+            {{- end }}
+          readinessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 20
+          resources:
+            {{- toYaml $ftp.resources | nindent 12 }}
+          securityContext:
+            {{- include "noonside.securityContext" . | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/sftpgo
+              subPath: provider
+            - name: data
+              mountPath: /srv/sftpgo
+              subPath: uploads
+            - name: tmp
+              mountPath: /tmp
+            {{- if $ftp.ftp.tls.secretName }}
+            - name: tls
+              mountPath: /etc/sftpgo/tls
+              readOnly: true
+            {{- end }}
+            {{- if $ftp.hostKeySecret }}
+            - name: hostkeys
+              mountPath: /etc/sftpgo/hostkeys
+              readOnly: true
+            {{- end }}
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ default (printf "%s-data" $name) $ftp.storage.existingClaim }}
+        - name: tmp
+          emptyDir: {}
+        {{- with $ftp.ftp.tls.secretName }}
+        - name: tls
+          secret:
+            secretName: {{ . }}
+        {{- end }}
+        {{- with $ftp.hostKeySecret }}
+        - name: hostkeys
+          secret:
+            secretName: {{ . }}
+            defaultMode: 0400
+        {{- end }}
+---
+# In-cluster: SFTP and the REST API for the API.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "noonside.labels" . | nindent 4 }}
+    app.kubernetes.io/component: sftpgo
+spec:
+  selector:
+    {{- include "noonside.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: sftpgo
+  ports:
+    - name: sftp
+      port: 2022
+      targetPort: sftp
+    - name: http
+      port: 8080
+      targetPort: http
+---
+# For the devices: FTP and its passive ports, e.g. a LoadBalancer.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}-public
+  labels:
+    {{- include "noonside.labels" . | nindent 4 }}
+    app.kubernetes.io/component: sftpgo
+  {{- with $ftp.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ $ftp.service.type }}
+  {{- if ne $ftp.service.type "ClusterIP" }}
+  externalTrafficPolicy: {{ $ftp.service.externalTrafficPolicy }}
+  {{- end }}
+  {{- with $ftp.service.loadBalancerIP }}
+  loadBalancerIP: {{ . }}
+  {{- end }}
+  selector:
+    {{- include "noonside.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: sftpgo
+  ports:
+    - name: ftp
+      port: {{ $ftp.ftp.port }}
+      targetPort: ftp
+    {{- if $ftp.sftp.external }}
+    - name: sftp
+      port: {{ $ftp.sftp.port }}
+      targetPort: sftp
+    {{- end }}
+    {{- range $passive }}
+    - name: {{ printf "pasv-%d" . }}
+      port: {{ . }}
+      targetPort: {{ . }}
+    {{- end }}
+{{- if not $ftp.storage.existingClaim }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ $name }}-data
+  labels:
+    {{- include "noonside.labels" . | nindent 4 }}
+  annotations:
+    # The accounts and the uploads survive uninstalling the release.
+    helm.sh/resource-policy: keep
+spec:
+  accessModes: ["ReadWriteOnce"]
+  {{- with $ftp.storage.storageClass }}
+  storageClassName: {{ . }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ $ftp.storage.size }}
+{{- end }}
+{{- end }}

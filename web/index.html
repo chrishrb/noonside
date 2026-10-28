@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#ffffff" />
+    <meta name="description" content="noonside: monitoring for photovoltaic systems." />
+    <link rel="icon" href="/favicon.ico" sizes="48x48" />
+    <link rel="icon" href="/favicon.svg" sizes="any" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon-180x180.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="noonside" />
+    <title>noonside</title>
+    <script src="/theme.js"></script>
+    <script src="/config.js"></script>
+    <style>
+      /* Splash, shown before the scripts load; FullScreenLoading reuses it. Colors from tokens.css;
+         the logo tile is --brand-sun, written out here (keep in sync with public/noonside-logo.svg). */
+      .splash { position: fixed; inset: 0; z-index: 100; display: grid; place-content: center; justify-items: center; gap: 12px;
+        background: #fafafa; color: #111111; font: 600 22px/1.2 "Inter Variable", system-ui, sans-serif; transition: opacity 200ms; }
+      .splash .logo-mark { display: block; margin-bottom: 4px; }
+      .splash-text { display: flex; align-items: center; gap: 8px; min-height: 24px; font-size: 14px; font-weight: 400; color: #6b6b6b; }
+      .splash.gone { opacity: 0; pointer-events: none; }
+      @media (prefers-color-scheme: dark) {
+        :root:not([data-theme="light"]) .splash { background: #0e0f11; color: #ececec; }
+        :root:not([data-theme="light"]) .splash-text { color: #9b9ba1; }
+      }
+      :root[data-theme="dark"] .splash { background: #0e0f11; color: #ececec; }
+      :root[data-theme="dark"] .splash-text { color: #9b9ba1; }
+    </style>
+  </head>
+  <body>
+    <div id="boot" class="splash" aria-hidden="true"><svg class="logo-mark" viewBox="0 0 32 32" width="72" height="72"><rect width="32" height="32" rx="8" fill="#c2410c"/><path d="M11.5 24v-5.5a4.5 4.5 0 0 1 9 0v5.5" fill="none" stroke="#ffffff" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="16" cy="8" r="2.5" fill="#ffffff"/></svg>noonside<span class="splash-text"></span></div>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

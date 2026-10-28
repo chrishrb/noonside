@@ -1,0 +1,15 @@
+{{define "content"}}
+{{template "heading" (printf "Join %s" .Data.SystemName)}}
+<p style="margin:0 0 16px 0;"><strong style="color:#1c1917;">{{.Data.Inviter}}</strong> invited you to the photovoltaic system <strong style="color:#1c1917;">{{.Data.SystemName}}</strong> on {{.App.Name}}.</p>
+<p style="margin:0 0 16px 0;">As {{if eq .Data.Role "admin" "owner"}}an{{else}}a{{end}} <strong style="color:#1c1917;">{{.Data.Role}}</strong> you can {{.Data.RoleDescription}}.</p>
+
+{{template "facts" (rows "System" .Data.SystemName "Role" (title .Data.Role) "Valid until" (datetime .Data.ExpiresAt))}}
+
+{{template "button" (map "URL" .Data.AcceptURL "Label" "Accept invitation")}}
+
+<p style="margin:0; font-size:14px; line-height:22px; color:#78716c;">Not expecting this? You can ignore this email &mdash; nothing happens unless you accept.</p>
+
+{{template "fallback-link" .Data.AcceptURL}}
+{{end}}
+
+{{define "footer"}}You received this email because someone invited this address to {{.App.Name}}.{{end}}

@@ -1,0 +1,13 @@
+name: pnpm store cache
+description: Caches the pnpm store for web/ and landing/. Needs pnpm on the PATH (mise).
+runs:
+  using: composite
+  steps:
+    - id: store
+      shell: bash
+      run: echo "path=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+    - uses: actions/cache@v6
+      with:
+        path: ${{ steps.store.outputs.path }}
+        key: pnpm-${{ runner.os }}-${{ hashFiles('web/pnpm-lock.yaml', 'landing/pnpm-lock.yaml') }}
+        restore-keys: pnpm-${{ runner.os }}-

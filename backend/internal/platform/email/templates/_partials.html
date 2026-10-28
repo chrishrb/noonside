@@ -1,0 +1,35 @@
+{{/* Reusable blocks for email content. Call with a map, e.g.
+     {{template "button" (map "URL" .Data.AcceptURL "Label" "Accept")}} */}}
+
+{{define "heading"}}<h1 class="h1" style="margin:0 0 16px 0; font-size:26px; line-height:34px; font-weight:700; letter-spacing:-0.4px; color:#1c1917;">{{.}}</h1>{{end}}
+
+{{define "paragraph"}}<p style="margin:0 0 16px 0;">{{.}}</p>{{end}}
+
+{{define "button"}}
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:28px 0;">
+  <tr>
+    <td align="center" bgcolor="#1c1917" style="border-radius:10px; background-color:#1c1917;">
+      <a href="{{.URL}}" target="_blank" style="display:inline-block; padding:14px 28px; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:16px; font-weight:600; line-height:20px; color:#ffffff; text-decoration:none; border-radius:10px;">{{.Label}} &rarr;</a>
+    </td>
+  </tr>
+</table>
+{{end}}
+
+{{define "facts"}}
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:8px 0 8px 0; background-color:#fffbeb; border:1px solid #fde68a; border-radius:12px;">
+  {{range $i, $row := .}}
+  <tr>
+    <td style="padding:{{if eq $i 0}}14px{{else}}4px{{end}} 20px 4px 20px; font-size:13px; line-height:20px; color:#92400e; text-transform:uppercase; letter-spacing:0.6px; width:35%; vertical-align:top;">{{index $row 0}}</td>
+    <td style="padding:{{if eq $i 0}}14px{{else}}4px{{end}} 20px 4px 0; font-size:15px; line-height:22px; color:#1c1917; font-weight:600; vertical-align:top;">{{index $row 1}}</td>
+  </tr>
+  {{end}}
+  <tr><td colspan="2" style="height:10px; line-height:10px; font-size:0;">&nbsp;</td></tr>
+</table>
+{{end}}
+
+{{define "fallback-link"}}
+<p style="margin:24px 0 0 0; padding-top:20px; border-top:1px solid #e7e2d8; font-size:13px; line-height:20px; color:#78716c;">
+  If the button doesn't work, copy this link into your browser:<br>
+  <a href="{{.}}" style="color:#c2410c; word-break:break-all;">{{.}}</a>
+</p>
+{{end}}

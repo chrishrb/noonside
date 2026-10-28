@@ -1,0 +1,9 @@
+{{define "layout"}}{{.App.Name}}
+{{repeat "=" (len .App.Name)}}
+
+{{template "content" .}}
+
+--
+{{block "footer" .}}You received this email because of activity on your {{.App.Name}} account.{{end}}
+{{if .App.URL}}{{.App.URL}}{{end}}
+{{end}}

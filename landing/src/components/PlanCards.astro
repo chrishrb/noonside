@@ -1,0 +1,86 @@
+---
+// Pricing cards. The buttons are a "fake door" (demand check before launch):
+// the API counts the click per plan (no cookies, no personal data) and
+// redirects to /bald/<plan>/, which explains that noonside isn't open yet.
+import Icon from './Icon.astro';
+import { API_URL, plans, type Plan } from '../lib/site';
+
+// A feature is a plain string, or `{ text, soon: true }` for one that isn't
+// built yet; those are labelled "geplant",
+// so the list never promises what a beta user can't find.
+type Feature = string | { text: string; soon: true };
+const soon = (text: string): Feature => ({ text, soon: true });
+
+const cards: { plan: Plan; badge?: string; featured?: boolean; text: string; includes?: string; features: Feature[]; cta: string }[] = [
+  {
+    plan: 'free',
+    text: 'Für eine Anlage, die einfach laufen soll: Sie erfahren, wenn sie ausfällt.',
+    features: [
+      '1 Anlage',
+      'FTP-Zugang für Ihren Solar-Log',
+      'Komplette Historie, auch aus dem Solar-Log',
+      'Alarme bei Ausfall: keine Daten, Wechselrichter offline oder mit Fehler',
+      'Per E-Mail und Push',
+      'Ihre Daten jederzeit als CSV',
+    ],
+    cta: 'Kostenlos starten',
+  },
+  {
+    plan: 'pro',
+    badge: 'Empfohlen',
+    featured: true,
+    text: 'Für alle, die wissen wollen, ob ihre Anlage bringt, was sie kann.',
+    includes: 'Alles aus Free, dazu:',
+    features: [
+      'Bis zu 5 Anlagen, egal wie viele kWp',
+      'Soll-Ertrag aus dem Wetter: Alarme, die Störungen von Wolken unterscheiden',
+      'Schleichende Verluste im Blick: Performance Ratio und Jahresvergleich',
+      'Berichte von täglich bis jährlich, mit Vergütung',
+      'Börsenstrompreise und das beste Zeitfenster für große Verbraucher',
+      'API, Webhooks und ntfy für Home Assistant und Co.',
+      soon('App für iPhone und Android mit Widgets'),
+      soon('Verbrauch, Netz und Batterie im Energiefluss'),
+    ],
+    cta: 'Pro wählen',
+  },
+  {
+    plan: 'installer',
+    text: 'Für Betriebe, die Anlagen ihrer Kunden betreuen.',
+    includes: 'Alles aus Pro, dazu:',
+    features: [
+      'Alle Kundenanlagen in einer Übersicht, herstellerunabhängig',
+      'Ihre Kunden bleiben Eigentümer, Ihr Team betreut als Admin',
+      'Alarme für Ihr Team statt Anrufe vom Kunden',
+      'Persönliches Onboarding',
+      soon('Ihr Logo und Ihre Farben'),
+    ],
+    cta: 'Interesse anmelden',
+  },
+];
+---
+<div class="plans">
+  {cards.map((c) => (
+    <article class:list={['plan', c.featured && 'featured']} aria-labelledby={`plan-${c.plan}`}>
+      <div class="plan-head">
+        <h3 id={`plan-${c.plan}`}>{plans[c.plan].name}</h3>
+        {c.badge && <span class="badge badge-accent">{c.badge}</span>}
+      </div>
+      <p class="price">{plans[c.plan].price}</p>
+      <p class="period">{plans[c.plan].period}</p>
+      <p class="plan-text">{c.text}</p>
+      {c.includes && <p class="plan-includes">{c.includes}</p>}
+      <ul class="checks">
+        {c.features.map((f) => typeof f === 'string'
+          ? <li>{f}</li>
+          : <li class="soon">{f.text} <span class="badge badge-planned">geplant</span></li>)}
+      </ul>
+      <form method="post" action={`${API_URL}/waitlist/interest`}>
+        <input type="hidden" name="plan" value={c.plan} />
+        <button class:list={['btn', 'btn-block', c.featured ? 'btn-primary' : 'btn-secondary']} type="submit">
+          {c.cta}<Icon name="arrow" size={18} />
+        </button>
+      </form>
+    </article>
+  ))}
+</div>
+<p class="pricing-note">Vorläufige Preise inkl. MwSt. Während der Beta ist noonside kostenlos, danach ist das Monatsabo jederzeit kündbar.</p>
