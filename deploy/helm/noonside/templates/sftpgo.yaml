@@ -197,6 +197,9 @@ spec:
   {{- if ne $ftp.service.type "ClusterIP" }}
   externalTrafficPolicy: {{ $ftp.service.externalTrafficPolicy }}
   {{- end }}
+  {{- if and (eq $ftp.service.type "LoadBalancer") (kindIs "bool" $ftp.service.allocateLoadBalancerNodePorts) }}
+  allocateLoadBalancerNodePorts: {{ $ftp.service.allocateLoadBalancerNodePorts }}
+  {{- end }}
   {{- with $ftp.service.loadBalancerIP }}
   loadBalancerIP: {{ . }}
   {{- end }}

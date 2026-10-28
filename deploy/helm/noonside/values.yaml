@@ -211,10 +211,11 @@ hostedFtp:
     passwordKey: SFTPGO_ADMIN_PASSWORD
   ftp:
     port: 21
-    # Passive data ports, published 1:1 by the public Service.
+    # Passive data ports, published 1:1 by the public Service. Not 50000+:
+    # Talos serves its API there.
     passivePorts:
-      start: 50000
-      end: 50019
+      start: 40000
+      end: 40019
     # The public IP announced for passive mode (behind a LoadBalancer).
     forcePassiveIP: ""
     tls:
@@ -238,6 +239,8 @@ hostedFtp:
     loadBalancerIP: ""
     # Local keeps the client's IP (SFTPGo's own login rate limits).
     externalTrafficPolicy: Local
+    # false: no NodePorts next to the load balancer's IP (null: the default).
+    allocateLoadBalancerNodePorts: null
   storage:
     size: 5Gi
     storageClass: ""
