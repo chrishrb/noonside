@@ -49,9 +49,10 @@ const migrationLock = 7_301_964_211
 
 // Migrate applies the migrations in dir that are not recorded yet, each in
 // its own transaction, and returns the applied versions. It records them in
-// supabase_migrations.schema_migrations like the Supabase CLI did, so the
-// history of databases set up with it carries over. Unlike the CLI it also
-// applies versions older than the newest recorded one.
+// noonside_migrations.schema_migrations (the Supabase CLI's table, renamed
+// from supabase_migrations on the first run, so the history of databases set
+// up with it carries over). It also applies versions older than the newest
+// recorded one.
 func Migrate(ctx context.Context, d *DB, dir string) ([]string, error) {
 	ms, err := ReadMigrations(dir)
 	if err != nil {
@@ -69,12 +70,18 @@ func Migrate(ctx context.Context, d *DB, dir string) ([]string, error) {
 		_, _ = conn.Exec(context.WithoutCancel(ctx), "SELECT pg_advisory_unlock($1)", migrationLock)
 	}()
 
-	if _, err := conn.Exec(ctx, `CREATE SCHEMA IF NOT EXISTS supabase_migrations;
-		CREATE TABLE IF NOT EXISTS supabase_migrations.schema_migrations (
+	if _, err := conn.Exec(ctx, `DO $$ BEGIN
+			IF EXISTS (SELECT FROM pg_namespace WHERE nspname = 'supabase_migrations')
+				AND NOT EXISTS (SELECT FROM pg_namespace WHERE nspname = 'noonside_migrations') THEN
+				ALTER SCHEMA supabase_migrations RENAME TO noonside_migrations;
+			END IF;
+		END $$;
+		CREATE SCHEMA IF NOT EXISTS noonside_migrations;
+		CREATE TABLE IF NOT EXISTS noonside_migrations.schema_migrations (
 			version text PRIMARY KEY, statements text[], name text)`); err != nil {
 		return nil, fmt.Errorf("create migration table: %w", err)
 	}
-	rows, err := conn.Query(ctx, "SELECT version FROM supabase_migrations.schema_migrations")
+	rows, err := conn.Query(ctx, "SELECT version FROM noonside_migrations.schema_migrations")
 	if err != nil {
 		return nil, err
 	}
@@ -101,7 +108,7 @@ func Migrate(ctx context.Context, d *DB, dir string) ([]string, error) {
 			if _, err := tx.Conn().PgConn().Exec(ctx, string(sql)).ReadAll(); err != nil {
 				return err
 			}
-			_, err := tx.Exec(ctx, `INSERT INTO supabase_migrations.schema_migrations (version, name, statements)
+			_, err := tx.Exec(ctx, `INSERT INTO noonside_migrations.schema_migrations (version, name, statements)
 				VALUES ($1, $2, ARRAY[$3])`, m.Version, m.Name, string(sql))
 			return err
 		})

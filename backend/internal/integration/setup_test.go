@@ -3,7 +3,7 @@
 // Package integration runs the API against the local stack (compose.yaml:
 // Postgres, the Auth server GoTrue and SFTPGo).
 // Run with `mise run test:integration`, which exports the TEST_* variables
-// from `supabase status`.
+// from compose.yaml (`mise run test:integration` sets them).
 package integration
 
 import (
@@ -34,10 +34,10 @@ import (
 	"github.com/chrishrb/noonside/internal/platform/auth"
 	"github.com/chrishrb/noonside/internal/platform/db"
 	"github.com/chrishrb/noonside/internal/platform/email"
+	"github.com/chrishrb/noonside/internal/platform/gotrue"
 	"github.com/chrishrb/noonside/internal/platform/media"
 	"github.com/chrishrb/noonside/internal/platform/notify"
 	"github.com/chrishrb/noonside/internal/platform/secretbox"
-	"github.com/chrishrb/noonside/internal/platform/supabase"
 	"github.com/chrishrb/noonside/internal/router"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
@@ -46,11 +46,11 @@ import (
 
 var (
 	databaseURL string
-	// supabaseURL is the public URL the tokens are issued for
-	// (<supabaseURL>/auth/v1), authURL where GoTrue answers.
-	supabaseURL string
-	authURL     string
-	secretKey   string
+	// publicURL is the app's origin: the tokens are issued for
+	// <publicURL>/auth/v1; authURL is where GoTrue answers.
+	publicURL string
+	authURL   string
+	secretKey string
 	// SFTPGo (hosted FTP): its REST API, admin password and SFTP address.
 	sftpgoURL      string
 	sftpgoPassword string
@@ -63,18 +63,18 @@ var (
 // variables.
 func TestMain(m *testing.M) {
 	databaseURL = os.Getenv("TEST_DATABASE_URL")
-	supabaseURL = os.Getenv("TEST_SUPABASE_URL")
+	publicURL = os.Getenv("TEST_PUBLIC_URL")
 	authURL = os.Getenv("TEST_AUTH_URL")
-	secretKey = os.Getenv("TEST_SUPABASE_SECRET_KEY")
+	secretKey = os.Getenv("TEST_AUTH_SERVICE_ROLE_KEY")
 	sftpgoURL = cmp.Or(os.Getenv("TEST_SFTPGO_URL"), "http://127.0.0.1:8090")
 	sftpgoPassword = os.Getenv("TEST_SFTPGO_ADMIN_PASSWORD")
 	sftpgoSFTPAddr = cmp.Or(os.Getenv("TEST_SFTPGO_SFTP_ADDR"), "127.0.0.1:2022")
-	if databaseURL == "" || supabaseURL == "" || secretKey == "" || sftpgoPassword == "" {
-		fmt.Fprintln(os.Stderr, "skipping integration tests: TEST_DATABASE_URL, TEST_SUPABASE_URL, TEST_SUPABASE_SECRET_KEY and TEST_SFTPGO_ADMIN_PASSWORD are required (see `mise run test:integration`)")
+	if databaseURL == "" || publicURL == "" || secretKey == "" || sftpgoPassword == "" {
+		fmt.Fprintln(os.Stderr, "skipping integration tests: TEST_DATABASE_URL, TEST_PUBLIC_URL, TEST_AUTH_SERVICE_ROLE_KEY and TEST_SFTPGO_ADMIN_PASSWORD are required (see `mise run test:integration`)")
 		os.Exit(0)
 	}
 	if authURL == "" {
-		authURL = strings.TrimRight(supabaseURL, "/") + "/auth/v1"
+		authURL = strings.TrimRight(publicURL, "/") + "/auth/v1"
 	}
 	os.Exit(m.Run())
 }
@@ -84,7 +84,7 @@ type env struct {
 	// Modules are the app's modules; db their database.
 	*app.Modules
 	db     *db.DB
-	admin  *supabase.Admin
+	admin  *gotrue.Admin
 	server *httptest.Server
 	outbox *outbox
 	mailer *email.Mailer
@@ -112,9 +112,9 @@ func newEnv(t *testing.T) *env {
 	require.NoError(t, err)
 	t.Cleanup(d.Close)
 
-	verifier, err := auth.NewVerifier(ctx, auth.VerifierConfig{URL: supabaseURL, AuthURL: authURL})
+	verifier, err := auth.NewVerifier(ctx, auth.VerifierConfig{URL: strings.TrimRight(publicURL, "/") + "/auth/v1", InternalURL: authURL})
 	require.NoError(t, err)
-	admin, err := supabase.NewAdmin(authURL, secretKey)
+	admin, err := gotrue.NewAdmin(authURL, secretKey)
 	require.NoError(t, err)
 	key, _ := secretbox.GenerateKey()
 	box, _ := secretbox.New(key)
@@ -241,7 +241,7 @@ func (e *env) anon() *client {
 func (e *env) createUser(email, password string, superadmin bool) uuid.UUID {
 	e.t.Helper()
 	ctx := context.Background()
-	u, err := e.admin.CreateUser(ctx, supabase.CreateUserRequest{Email: email, Password: password, Name: email, EmailConfirmed: true})
+	u, err := e.admin.CreateUser(ctx, gotrue.CreateUserRequest{Email: email, Password: password, Name: email, EmailConfirmed: true})
 	require.NoError(e.t, err)
 	if superadmin {
 		_, err = e.admin.SetAppMetadata(ctx, u.ID, map[string]any{auth.SuperadminClaim: true})
@@ -270,7 +270,7 @@ func signIn(email, password string) (int, string) {
 func (e *env) login(email, password string) *client {
 	e.t.Helper()
 	status, token := signIn(email, password)
-	require.Equal(e.t, http.StatusOK, status, "supabase sign-in for %s", email)
+	require.Equal(e.t, http.StatusOK, status, "sign-in for %s", email)
 	c := e.anon()
 	c.token = token
 	return c

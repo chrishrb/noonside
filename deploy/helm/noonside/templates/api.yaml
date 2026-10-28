@@ -56,10 +56,9 @@ spec:
               value: {{ .Values.environment | quote }}
             - name: PUBLIC_URL
               value: {{ $origin | quote }}
-            # GoTrue is served under /auth/v1 of the same origin (HTTPRoute).
-            - name: SUPABASE_URL
-              value: {{ $origin | quote }}
-            - name: SUPABASE_INTERNAL_URL
+            # GoTrue: public under /auth/v1 of the same origin (HTTPRoute, the
+            # tokens' issuer), in-cluster at its Service.
+            - name: AUTH_INTERNAL_URL
               value: {{ printf "http://%s:9999" (include "noonside.authName" .) | quote }}
             {{- include "noonside.dbEnv" . | nindent 12 }}
             - name: LANDING_URL

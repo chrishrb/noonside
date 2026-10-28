@@ -216,7 +216,7 @@ func TestAdminUsers(t *testing.T) {
 	super.do("PATCH", "/admin/users/"+uuid.NewString(), obj{"is_superadmin": true}, 404, nil)
 }
 
-func TestProfileAndSupabaseLogin(t *testing.T) {
+func TestProfileAndLogin(t *testing.T) {
 	e := newEnv(t)
 	email := uniq("user")
 	e.createUser(email, "user-password-1", false)

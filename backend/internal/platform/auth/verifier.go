@@ -15,11 +15,11 @@ import (
 )
 
 // SuperadminClaim is the app_metadata flag marking superadmins. app_metadata
-// can only be written with the Supabase secret key (see `noonside user promote`).
+// can only be written with the service_role key (see `noonside user promote`).
 const SuperadminClaim = "solar0_superadmin"
 
-// SupabaseClaims are the claims of a Supabase Auth access token.
-type SupabaseClaims struct {
+// Claims are the claims of a GoTrue access token.
+type Claims struct {
 	jwt.RegisteredClaims
 	Email       string         `json:"email"`
 	Role        string         `json:"role"`
@@ -27,7 +27,7 @@ type SupabaseClaims struct {
 	IsAnonymous bool           `json:"is_anonymous"`
 }
 
-// Verifier validates Supabase Auth (GoTrue) access tokens.
+// Verifier validates GoTrue access tokens.
 type Verifier struct {
 	jwks       keyfunc.Keyfunc
 	hmacSecret []byte
@@ -37,12 +37,12 @@ type Verifier struct {
 }
 
 type VerifierConfig struct {
-	// URL is the public URL the SPA signs in at, e.g. https://noonside.example.com;
-	// tokens are issued by <URL>/auth/v1.
+	// URL is GoTrue's public URL, the tokens' issuer, e.g.
+	// https://noonside.example.com/auth/v1.
 	URL string
-	// AuthURL is where the server reaches the Auth server (GoTrue) for the
-	// JWKS, e.g. http://noonside-auth:9999. Default: <URL>/auth/v1.
-	AuthURL string
+	// InternalURL is where the server reaches GoTrue for the JWKS, e.g.
+	// http://noonside-auth:9999. Default: URL.
+	InternalURL string
 	// JWTSecret enables the legacy HS256 shared secret (optional).
 	JWTSecret string
 }
@@ -50,13 +50,13 @@ type VerifierConfig struct {
 // NewVerifier fetches the Auth server's JWKS in the background and keeps it
 // refreshed until ctx is cancelled.
 func NewVerifier(ctx context.Context, cfg VerifierConfig) (*Verifier, error) {
-	base := strings.TrimRight(cfg.URL, "/")
-	if base == "" {
-		return nil, errors.New("supabase url is required")
+	issuer := strings.TrimRight(cfg.URL, "/")
+	if issuer == "" {
+		return nil, errors.New("auth url is required")
 	}
-	authURL := strings.TrimRight(cfg.AuthURL, "/")
+	authURL := strings.TrimRight(cfg.InternalURL, "/")
 	if authURL == "" {
-		authURL = base + "/auth/v1"
+		authURL = issuer
 	}
 	// Set when the constructor returns; a failed first fetch reports before.
 	var loaded atomic.Pointer[keyfunc.Keyfunc]
@@ -66,10 +66,10 @@ func NewVerifier(ctx context.Context, cfg VerifierConfig) (*Verifier, error) {
 			return k != nil && hasKeys(ctx, *k)
 		})})
 	if err != nil {
-		return nil, fmt.Errorf("load supabase jwks: %w", err)
+		return nil, fmt.Errorf("load gotrue jwks: %w", err)
 	}
 	loaded.Store(&jwks)
-	return newVerifier(jwks, base+"/auth/v1", cfg.JWTSecret), nil
+	return newVerifier(jwks, issuer, cfg.JWTSecret), nil
 }
 
 // refreshErrorHandler logs failed JWKS refreshes. A failed hourly refresh
@@ -82,7 +82,7 @@ func refreshErrorHandler(logger *slog.Logger, haveKeys func(context.Context) boo
 			if !haveKeys(context.WithoutCancel(ctx)) { // ctx has usually timed out
 				level = slog.LevelError
 			}
-			logger.Log(ctx, level, "refresh supabase jwks failed", "error", err, "url", u)
+			logger.Log(ctx, level, "refresh gotrue jwks failed", "error", err, "url", u)
 		}
 	}
 }
@@ -105,7 +105,7 @@ func newVerifier(jwks keyfunc.Keyfunc, issuer, secret string) *Verifier {
 // Verify checks signature, issuer, audience and expiry and returns the caller.
 // Per-system permissions are resolved separately from the database.
 func (v *Verifier) Verify(token string) (*Principal, error) {
-	var c SupabaseClaims
+	var c Claims
 	_, err := jwt.ParseWithClaims(token, &c, v.key,
 		jwt.WithValidMethods(v.methods),
 		jwt.WithIssuer(v.issuer),

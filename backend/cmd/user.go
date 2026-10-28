@@ -12,7 +12,7 @@ import (
 	"github.com/chrishrb/noonside/internal/modules/identity"
 	"github.com/chrishrb/noonside/internal/platform/config"
 	"github.com/chrishrb/noonside/internal/platform/db"
-	"github.com/chrishrb/noonside/internal/platform/supabase"
+	"github.com/chrishrb/noonside/internal/platform/gotrue"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 )
@@ -25,7 +25,7 @@ var (
 
 var userCmd = &cobra.Command{
 	Use:   "user",
-	Short: "Manage Supabase Auth users",
+	Short: "Manage GoTrue users",
 }
 
 var userCreateCmd = &cobra.Command{
@@ -34,7 +34,7 @@ var userCreateCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		config.ReadConfig()
-		admin, err := app.NewSupabaseAdmin()
+		admin, err := app.NewAuthAdmin()
 		if err != nil {
 			return err
 		}
@@ -46,7 +46,7 @@ var userCreateCmd = &cobra.Command{
 		id, err := identity.New(nil, admin).CreateUser(context.Background(), identity.NewUser{
 			Email: args[0], Password: password, Name: userName, Superadmin: userSuperadmin,
 		})
-		if errors.Is(err, supabase.ErrUserExists) {
+		if errors.Is(err, gotrue.ErrUserExists) {
 			return fmt.Errorf("a user with this email already exists")
 		}
 		if err != nil {
@@ -64,7 +64,7 @@ var userPromoteCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		config.ReadConfig()
-		admin, err := app.NewSupabaseAdmin()
+		admin, err := app.NewAuthAdmin()
 		if err != nil {
 			return err
 		}

@@ -11,9 +11,8 @@ type Handler interface {
 	// AcceptInvitation implements acceptInvitation operation.
 	//
 	// Accept an invitation. Authenticated callers join with their account (the invitation email must
-	// match). Unauthenticated callers must send `name` and `password`: a Supabase account for the invited
-	// email is created (email pre-confirmed by the invitation) and the client then signs in with
-	// supabase-js.
+	// match). Unauthenticated callers must send `name` and `password`: an account for the invited email is
+	// created (email pre-confirmed by the invitation) and the client then signs in with GoTrue.
 	//
 	// POST /invitations/{token}/accept
 	AcceptInvitation(ctx context.Context, req OptAcceptInvitationRequest, params AcceptInvitationParams) (*AcceptInvitationResult, error)

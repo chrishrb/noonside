@@ -1,4 +1,4 @@
-// Package auth verifies Supabase access tokens and defines the role/scope model.
+// Package auth verifies GoTrue access tokens and defines the role/scope model.
 package auth
 
 import (

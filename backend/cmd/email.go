@@ -60,7 +60,7 @@ var emailPreviewCmd = &cobra.Command{
 
 var emailSendTestCmd = &cobra.Command{
 	Use:   "send-test NAME",
-	Short: "Send an email with sample data via the configured SMTP server (e.g. Mailpit from `supabase start`)",
+	Short: "Send an email with sample data via the configured SMTP server (e.g. Mailpit from compose.yaml)",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		config.ReadConfig()
@@ -85,9 +85,9 @@ var emailSendTestCmd = &cobra.Command{
 
 var emailTemplatesDir string
 
-var emailSupabaseTemplatesCmd = &cobra.Command{
-	Use:   "supabase-templates",
-	Short: "Render the Supabase Auth email templates in the noonside layout",
+var emailAuthTemplatesCmd = &cobra.Command{
+	Use:   "auth-templates",
+	Short: "Render the GoTrue email templates in the noonside layout",
 	Long: `Writes confirmation/recovery/magic_link/email_change templates for the Auth
 server (GoTrue) into backend/db/auth-templates. The API serves them under /auth-templates/
 (auth_templates_dir), where GoTrue fetches them (GOTRUE_MAILER_TEMPLATES_*).`,
@@ -102,7 +102,7 @@ server (GoTrue) into backend/db/auth-templates. The API serves them under /auth-
 			// backend/db/auth-templates, wherever the command runs from.
 			dir = filepath.Join(config.Dir, "..", "db", "auth-templates")
 		}
-		written, err := r.ExportSupabaseTemplates(dir)
+		written, err := r.ExportAuthTemplates(dir)
 		if err != nil {
 			return err
 		}
@@ -115,8 +115,8 @@ server (GoTrue) into backend/db/auth-templates. The API serves them under /auth-
 
 func init() {
 	rootCmd.AddCommand(emailCmd)
-	emailCmd.AddCommand(emailListCmd, emailPreviewCmd, emailSendTestCmd, emailSupabaseTemplatesCmd)
-	emailSupabaseTemplatesCmd.Flags().StringVar(&emailTemplatesDir, "dir", "", "output directory (default backend/db/auth-templates)")
+	emailCmd.AddCommand(emailListCmd, emailPreviewCmd, emailSendTestCmd, emailAuthTemplatesCmd)
+	emailAuthTemplatesCmd.Flags().StringVar(&emailTemplatesDir, "dir", "", "output directory (default backend/db/auth-templates)")
 	emailPreviewCmd.Flags().BoolVar(&emailPreviewText, "text", false, "render the plain-text part")
 	emailSendTestCmd.Flags().StringVar(&emailTo, "to", "test@noonside.local", "recipient")
 }

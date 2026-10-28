@@ -38,23 +38,22 @@ var keygenVAPIDCmd = &cobra.Command{
 
 var keygenGoTrueCmd = &cobra.Command{
 	Use:   "gotrue",
-	Short: "Generate the signing key and API keys for a self-hosted Auth server (GoTrue)",
-	Long: `Generate the secrets of a self-hosted Supabase Auth (GoTrue) server:
+	Short: "Generate the signing key and the service_role key for a self-hosted GoTrue",
+	Long: `Generate the secrets of a self-hosted GoTrue server:
 
   GOTRUE_JWT_KEYS       ES256 private JWK that signs access tokens (GoTrue)
   GOTRUE_JWT_SECRET     HS256 secret GoTrue requires (GoTrue only)
-  SUPABASE_SECRET_KEY   service_role token for the admin API (noonside API)
-  SUPABASE_ANON_KEY     anon token, the SPA's publishable key (not secret)
+  AUTH_SERVICE_ROLE_KEY service_role token for GoTrue's admin API (noonside API)
 
-Changing them signs everyone out; the API keys are valid for --years.`,
+Changing them signs everyone out; the service_role key is valid for --years.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		years, _ := cmd.Flags().GetInt("years")
 		k, err := auth.GenerateGoTrueKeys(time.Duration(years) * 365 * 24 * time.Hour)
 		if err != nil {
 			return err
 		}
-		fmt.Printf("GOTRUE_JWT_KEYS=%s\nGOTRUE_JWT_SECRET=%s\nSUPABASE_SECRET_KEY=%s\nSUPABASE_ANON_KEY=%s\n",
-			k.JWTKeys, k.JWTSecret, k.ServiceRoleKey, k.AnonKey)
+		fmt.Printf("GOTRUE_JWT_KEYS=%s\nGOTRUE_JWT_SECRET=%s\nAUTH_SERVICE_ROLE_KEY=%s\n",
+			k.JWTKeys, k.JWTSecret, k.ServiceRoleKey)
 		return nil
 	},
 }

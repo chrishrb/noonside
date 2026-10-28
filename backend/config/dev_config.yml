@@ -4,10 +4,9 @@ cors_allowed_origins:
   - http://localhost:5173
   - http://localhost:8081
 # Local stack from compose.yaml (`mise run db:up`). The SPA reaches GoTrue as
-# /auth/v1 through Vite, which issues tokens for http://localhost:5173/auth/v1;
-# the server calls it directly. SUPABASE_SECRET_KEY is set by the mise tasks.
-supabase_url: http://localhost:5173
-supabase_internal_url: http://127.0.0.1:9999
+# /auth/v1 through Vite (tokens are issued for <public_url>/auth/v1); the
+# server calls it directly. AUTH_SERVICE_ROLE_KEY is set by the mise tasks.
+auth_internal_url: http://127.0.0.1:9999
 database_url: postgresql://postgres:postgres@127.0.0.1:54322/postgres
 # Served to GoTrue (compose.yaml) for its emails.
 auth_templates_dir: ../db/auth-templates

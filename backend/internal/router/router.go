@@ -27,7 +27,7 @@ type SPA struct {
 	// served).
 	Media *media.Dir
 	// AuthTemplates is the directory of the Auth server's email templates
-	// (`noonside email supabase-templates`), served under authTemplatesPath
+	// (`noonside email auth-templates`), served under authTemplatesPath
 	// for GoTrue to fetch (GOTRUE_MAILER_TEMPLATES_*); empty: not served.
 	AuthTemplates string
 }

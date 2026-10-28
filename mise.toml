@@ -33,7 +33,7 @@ run = [
 
 [tasks."test:integration"]
 description = 'Run integration tests against the local stack (compose.yaml; `mise run db:up`)'
-env = { ENVIRONMENT = "dev", TEST_DATABASE_URL = "{{vars.dev_database_url}}", TEST_SUPABASE_URL = "http://localhost:5173", TEST_AUTH_URL = "http://127.0.0.1:9999", TEST_SUPABASE_SECRET_KEY = "{{vars.dev_secret_key}}", TEST_SFTPGO_URL = "http://127.0.0.1:8090", TEST_SFTPGO_ADMIN_PASSWORD = "{{vars.dev_sftpgo_password}}", TEST_SFTPGO_SFTP_ADDR = "127.0.0.1:2022" }
+env = { ENVIRONMENT = "dev", TEST_DATABASE_URL = "{{vars.dev_database_url}}", TEST_PUBLIC_URL = "http://localhost:5173", TEST_AUTH_URL = "http://127.0.0.1:9999", TEST_AUTH_SERVICE_ROLE_KEY = "{{vars.dev_secret_key}}", TEST_SFTPGO_URL = "http://127.0.0.1:8090", TEST_SFTPGO_ADMIN_PASSWORD = "{{vars.dev_sftpgo_password}}", TEST_SFTPGO_SFTP_ADDR = "127.0.0.1:2022" }
 run = [
     'go -C backend run . migrate',
     'go -C backend test -count=1 -tags=integration ./internal/integration/...',
@@ -41,12 +41,12 @@ run = [
 
 [tasks.dev]
 description = 'Run the server against the local stack (compose.yaml; `mise run db:up`)'
-env = { ENVIRONMENT = "dev", SUPABASE_SECRET_KEY = "{{vars.dev_secret_key}}", SFTPGO_ADMIN_PASSWORD = "{{vars.dev_sftpgo_password}}" }
+env = { ENVIRONMENT = "dev", AUTH_SERVICE_ROLE_KEY = "{{vars.dev_secret_key}}", SFTPGO_ADMIN_PASSWORD = "{{vars.dev_sftpgo_password}}" }
 run = ['go -C backend run . serve']
 
 [tasks."dev:stack"]
 description = 'Local stack (compose.yaml, migrated), the API with reload on changes (air) and Vite; Ctrl-C stops both'
-env = { ENVIRONMENT = "dev", SUPABASE_SECRET_KEY = "{{vars.dev_secret_key}}", SFTPGO_ADMIN_PASSWORD = "{{vars.dev_sftpgo_password}}" }
+env = { ENVIRONMENT = "dev", AUTH_SERVICE_ROLE_KEY = "{{vars.dev_secret_key}}", SFTPGO_ADMIN_PASSWORD = "{{vars.dev_sftpgo_password}}" }
 run = '''
 set -eu
 for port in 8080 5173; do
@@ -58,12 +58,6 @@ for port in 8080 5173; do
 done
 docker compose up -d --wait
 go -C backend run . migrate
-# web/.env.local from the Supabase CLI days would point the app elsewhere.
-if [ -f web/.env.local ] && grep -q '^VITE_SUPABASE_' web/.env.local; then
-  grep -v '^VITE_SUPABASE_' web/.env.local > web/.env.local.tmp || true
-  mv web/.env.local.tmp web/.env.local
-  echo "removed VITE_SUPABASE_* from web/.env.local" >&2
-fi
 trap 'kill 0' EXIT INT TERM
 (cd backend && air) &
 pnpm -C web dev &

@@ -18,11 +18,11 @@ import (
 	"github.com/chrishrb/noonside/internal/platform/config"
 	"github.com/chrishrb/noonside/internal/platform/db"
 	"github.com/chrishrb/noonside/internal/platform/email"
+	"github.com/chrishrb/noonside/internal/platform/gotrue"
 	"github.com/chrishrb/noonside/internal/platform/media"
 	"github.com/chrishrb/noonside/internal/platform/notify"
 	"github.com/chrishrb/noonside/internal/platform/push"
 	"github.com/chrishrb/noonside/internal/platform/secretbox"
-	"github.com/chrishrb/noonside/internal/platform/supabase"
 	"github.com/chrishrb/noonside/internal/router"
 	"github.com/spf13/viper"
 )
@@ -62,14 +62,14 @@ func NewDeps(ctx context.Context) (*Deps, error) {
 		return nil, err
 	}
 	verifier, err := auth.NewVerifier(ctx, auth.VerifierConfig{
-		URL:       viper.GetString("SUPABASE_URL"),
-		AuthURL:   viper.GetString("SUPABASE_INTERNAL_URL"),
-		JWTSecret: viper.GetString("SUPABASE_JWT_SECRET"),
+		URL:         PublicAuthURL(),
+		InternalURL: viper.GetString("AUTH_INTERNAL_URL"),
+		JWTSecret:   viper.GetString("AUTH_JWT_SECRET"),
 	})
 	if err != nil {
 		return nil, err
 	}
-	admin, err := NewSupabaseAdmin()
+	admin, err := NewAuthAdmin()
 	if err != nil {
 		return nil, err
 	}
@@ -280,27 +280,35 @@ func secretBox() (*secretbox.Box, error) {
 	return secretbox.New(key)
 }
 
-// NewSupabaseAdmin creates the Auth admin client from SUPABASE_URL (or
-// SUPABASE_INTERNAL_URL) and SUPABASE_SECRET_KEY.
-func NewSupabaseAdmin() (*supabase.Admin, error) {
-	a, err := supabase.NewAdmin(AuthURL(), viper.GetString("SUPABASE_SECRET_KEY"))
+// NewAuthAdmin creates the GoTrue admin client from AuthURL and
+// AUTH_SERVICE_ROLE_KEY.
+func NewAuthAdmin() (*gotrue.Admin, error) {
+	a, err := gotrue.NewAdmin(AuthURL(), viper.GetString("AUTH_SERVICE_ROLE_KEY"))
 	if err != nil {
-		return nil, fmt.Errorf("supabase admin: %w (set SUPABASE_URL and SUPABASE_SECRET_KEY)", err)
+		return nil, fmt.Errorf("auth admin: %w (set PUBLIC_URL or AUTH_INTERNAL_URL, and AUTH_SERVICE_ROLE_KEY)", err)
 	}
 	return a, nil
 }
 
-// AuthURL is where the server reaches the Auth server (GoTrue):
-// SUPABASE_INTERNAL_URL inside the cluster, else <SUPABASE_URL>/auth/v1
-// through the gateway (or the Vite proxy in dev).
-func AuthURL() string {
-	if u := viper.GetString("SUPABASE_INTERNAL_URL"); u != "" {
-		return u
+// PublicAuthURL is GoTrue's public URL, the issuer of its tokens: AUTH_URL,
+// else <PUBLIC_URL>/auth/v1 (the gateway, or the Vite proxy in dev).
+func PublicAuthURL() string {
+	if u := viper.GetString("AUTH_URL"); u != "" {
+		return strings.TrimRight(u, "/")
 	}
-	if u := viper.GetString("SUPABASE_URL"); u != "" {
+	if u := viper.GetString("PUBLIC_URL"); u != "" {
 		return strings.TrimRight(u, "/") + "/auth/v1"
 	}
 	return ""
+}
+
+// AuthURL is where the server reaches GoTrue: AUTH_INTERNAL_URL inside the
+// cluster, else its public URL.
+func AuthURL() string {
+	if u := viper.GetString("AUTH_INTERNAL_URL"); u != "" {
+		return u
+	}
+	return PublicAuthURL()
 }
 
 // ConfigPath reads a path setting; a relative path is relative to the

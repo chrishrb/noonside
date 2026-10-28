@@ -1,8 +1,8 @@
 # Production defaults for the Helm chart (deploy/helm/noonside). Everything
-# specific to an installation (public_url, supabase_url, SMTP, mail_from,
+# specific to an installation (public_url, SMTP, mail_from,
 # vapid_public_key, Sentry, hosted FTP) comes from the chart's values as env
 # vars, the secrets from the release's secrets. The chart also sets the
-# in-cluster addresses (DATABASE_URL, SUPABASE_INTERNAL_URL).
+# in-cluster addresses (DATABASE_URL, AUTH_INTERNAL_URL).
 
 # The web app is served from the same origin (its own container behind the
 # same gateway), so no CORS.

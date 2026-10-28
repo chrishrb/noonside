@@ -5,7 +5,7 @@ CREATE EXTENSION IF NOT EXISTS citext WITH SCHEMA extensions;
 
 -- identity ------------------------------------------------------------------
 
--- One row per Supabase Auth user, kept in sync by trigger.
+-- One row per Auth (GoTrue) user, kept in sync by trigger.
 CREATE TABLE profiles (
     id          uuid PRIMARY KEY REFERENCES auth.users (id) ON DELETE CASCADE,
     email       extensions.citext NOT NULL UNIQUE,
@@ -182,8 +182,8 @@ CREATE TABLE inverter_events (
 CREATE INDEX inverter_events_started_idx ON inverter_events (started_at DESC);
 
 -- lockdown -------------------------------------------------------------------
--- Supabase exposes the public schema to the anon/authenticated roles via
--- PostgREST. Every table gets RLS without policies and no grants for them.
+-- The former hosting exposed the public schema to the anon/authenticated
+-- roles via PostgREST. Every table gets RLS without policies and no grants for them.
 -- New tables in later migrations must repeat this (see CLAUDE.md).
 
 DO $$

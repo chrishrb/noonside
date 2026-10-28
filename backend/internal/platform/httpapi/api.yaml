@@ -7,8 +7,8 @@ info:
   description: |
     Monitoring API for photovoltaic systems.
 
-    Users sign in with Supabase Auth (supabase-js) and send the Supabase access
-    token as `Authorization: Bearer`. Devices push data and integrations read
+    Users sign in with the Auth server (GoTrue, under `/auth/v1`) and send its
+    access token as `Authorization: Bearer`. Devices push data and integrations read
     it with per-system API keys (`X-API-Key`): a key carries `data:ingest`
     (ingest endpoints), `data:read` (live, overview, daily energy, weather,
     prices, advice) or both.
@@ -782,9 +782,9 @@ paths:
       description: |
         Accept an invitation. Authenticated callers join with their account
         (the invitation email must match). Unauthenticated callers must send
-        `name` and `password`: a Supabase account for the invited email is
-        created (email pre-confirmed by the invitation) and the client then
-        signs in with supabase-js.
+        `name` and `password`: an account for the invited email is created
+        (email pre-confirmed by the invitation) and the client then signs in
+        with GoTrue.
       security:
         - bearerAuth: []
         - {}

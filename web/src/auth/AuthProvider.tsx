@@ -1,11 +1,11 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import type { AuthChangeEvent, Session } from '@supabase/supabase-js';
+import type { AuthChangeEvent, Session } from '@supabase/auth-js';
 import { useQueryClient } from '@tanstack/react-query';
 import { persister } from '@/api/persist';
 import { queryId } from '@/api/queries';
 import i18n from '@/i18n';
 import { setSentryUser } from '@/lib/sentry';
-import { supabase } from './supabase';
+import { authClient } from './client';
 
 interface AuthState {
   session: Session | null;
@@ -30,15 +30,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const userId = useRef<string | null>(undefined);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
+    authClient.getSession().then(({ data }) => {
       setSession(data.session);
       setReady(true);
     });
-    const { data } = supabase.auth.onAuthStateChange((event: AuthChangeEvent, s) => {
+    const { data } = authClient.onAuthStateChange((event: AuthChangeEvent, s) => {
       setSession(s);
       if (event === 'PASSWORD_RECOVERY') setRecovery(true);
       // Another user may sign in next: drop everything cached for this one.
-      // supabase-js also emits SIGNED_IN for the same user whenever the
+      // The auth client also emits SIGNED_IN for the same user whenever the
       // browser tab becomes visible again, so compare the user: clearing the
       // cache then would remount the app and lose open dialogs and forms.
       // The cache restored from IndexedDB may belong to a user whose session
@@ -59,20 +59,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const value = useMemo<AuthState>(() => ({
     session, ready, recovery,
     async signIn(email, password) {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      const { error } = await authClient.signInWithPassword({ email, password });
       if (error) throw new Error(error.code === 'invalid_credentials' ? i18n.t('auth.wrongCredentials') : error.message);
     },
     async signOut() {
       // While the token is still valid: this device should stop getting pushes.
       await import('@/lib/push').then((m) => m.unsubscribePush()).catch(() => {});
-      await supabase.auth.signOut();
+      await authClient.signOut();
     },
     async resetPassword(email) {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: `${window.location.origin}/reset-password` });
+      const { error } = await authClient.resetPasswordForEmail(email, { redirectTo: `${window.location.origin}/reset-password` });
       if (error) throw error;
     },
     async updatePassword(password) {
-      const { error } = await supabase.auth.updateUser({ password });
+      const { error } = await authClient.updateUser({ password });
       if (error) throw error;
       setRecovery(false);
     },

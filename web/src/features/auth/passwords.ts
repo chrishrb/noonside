@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-/** New password + repeat, matching Supabase's minimum length (config.toml). */
+/** New password + repeat, matching GoTrue's minimum length (GOTRUE_PASSWORD_MIN_LENGTH). */
 export const newPasswordFields = {
   password: z.string().min(10, 'validation.passwordMin').max(200, 'validation.passwordMax'),
   password2: z.string().min(1, 'validation.passwordRepeat'),

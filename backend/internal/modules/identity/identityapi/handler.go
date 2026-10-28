@@ -12,10 +12,10 @@ import (
 	"github.com/chrishrb/noonside/internal/modules/identity"
 	"github.com/chrishrb/noonside/internal/platform/auth"
 	"github.com/chrishrb/noonside/internal/platform/db"
+	"github.com/chrishrb/noonside/internal/platform/gotrue"
 	"github.com/chrishrb/noonside/internal/platform/httpapi"
 	"github.com/chrishrb/noonside/internal/platform/httpapi/generated"
 	"github.com/chrishrb/noonside/internal/platform/media"
-	"github.com/chrishrb/noonside/internal/platform/supabase"
 	"github.com/google/uuid"
 )
 
@@ -44,7 +44,7 @@ func New(m *identity.Module, systems Systems, cfg Config) *Handler {
 	return &Handler{identity: m, systems: systems, cfg: cfg}
 }
 
-// Sign-in, sessions and passwords are handled by Supabase Auth. /me only
+// Sign-in, sessions and passwords are handled by GoTrue. /me only
 // serves the caller's profile and memberships.
 
 func (h *Handler) GetMe(ctx context.Context) (*generated.Me, error) {
@@ -172,9 +172,9 @@ func (h *Handler) CreateUser(ctx context.Context, req *generated.CreateUserReque
 
 // CreateUserError maps the errors of identity.Module.CreateUser.
 func CreateUserError(err error) error {
-	var ae *supabase.APIError
+	var ae *gotrue.APIError
 	switch {
-	case errors.Is(err, supabase.ErrUserExists):
+	case errors.Is(err, gotrue.ErrUserExists):
 		return httpapi.Conflict("a user with this email already exists")
 	case errors.As(err, &ae) && ae.WeakPassword():
 		return httpapi.BadRequest(ae.Msg)
@@ -248,12 +248,12 @@ func (h *Handler) SendUserPasswordReset(ctx context.Context, params generated.Se
 		return err
 	}
 	err := h.identity.SendPasswordReset(ctx, params.UserId, strings.TrimRight(h.cfg.PublicURL, "/")+"/reset-password")
-	var ae *supabase.APIError
+	var ae *gotrue.APIError
 	switch {
 	case errors.As(err, &ae) && ae.Status == http.StatusTooManyRequests:
 		return &httpapi.Error{Status: http.StatusTooManyRequests, Msg: "too many emails were sent; try again later"}
 	case errors.As(err, &ae) && ae.Status >= 500:
-		// Supabase Auth sends the email itself; this is its SMTP setup.
+		// GoTrue sends the email itself; this is its SMTP setup.
 		slog.ErrorContext(ctx, "password reset email", "error", err)
 		return httpapi.BadGateway("the sign-in service could not send the email")
 	}
@@ -317,7 +317,7 @@ func UploadError(err error) error {
 
 // userError maps the errors of identity.Module.UpdateUser.
 func userError(err error) error {
-	if errors.Is(err, supabase.ErrUserExists) {
+	if errors.Is(err, gotrue.ErrUserExists) {
 		return httpapi.Conflict("a user with this email already exists")
 	}
 	return err

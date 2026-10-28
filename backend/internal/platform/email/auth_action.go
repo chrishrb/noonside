@@ -8,8 +8,8 @@ import (
 )
 
 // AuthAction is a generic "click to continue" email. It is used to render the
-// Supabase Auth email templates (confirm sign-up, reset password, …) in the
-// noonside layout; see ExportSupabaseTemplates.
+// GoTrue email templates (confirm sign-up, reset password, …) in the
+// noonside layout; see ExportAuthTemplates.
 type AuthAction struct {
 	Title       string
 	Intro       string
@@ -36,23 +36,23 @@ func init() {
 	})
 }
 
-// SupabaseTemplate is one Auth (GoTrue) email (GOTRUE_MAILER_TEMPLATES_<KIND>).
-type SupabaseTemplate struct {
+// AuthTemplate is one Auth (GoTrue) email (GOTRUE_MAILER_TEMPLATES_<KIND>).
+type AuthTemplate struct {
 	Kind    string // confirmation, recovery, magic_link, email_change
 	Subject string
 	Email   AuthAction
 }
 
-// urlSentinel stands in for Supabase's {{ .ConfirmationURL }} while rendering,
+// urlSentinel stands in for GoTrue's {{ .ConfirmationURL }} while rendering,
 // because html/template would escape the braces inside href attributes.
-const urlSentinel = "https://supabase-confirmation-url.invalid/"
+const urlSentinel = "https://gotrue-confirmation-url.invalid/"
 
 // siteSentinel stands in for the app's URL, which becomes GoTrue's
 // {{ .SiteURL }} (GOTRUE_SITE_URL), so the templates fit every installation.
-const siteSentinel = "https://supabase-site-url.invalid"
+const siteSentinel = "https://gotrue-site-url.invalid"
 
-// SupabaseTemplates are the Supabase Auth emails used by noonside.
-var SupabaseTemplates = []SupabaseTemplate{
+// AuthTemplates are the GoTrue emails used by noonside.
+var AuthTemplates = []AuthTemplate{
 	{Kind: "confirmation", Subject: "Confirm your email", Email: AuthAction{
 		Title: "Confirm your email", Intro: "Please confirm this address to finish setting up your noonside account.",
 		ButtonLabel: "Confirm email", Note: "If you didn't create an account, you can ignore this email.",
@@ -75,9 +75,9 @@ var SupabaseTemplates = []SupabaseTemplate{
 	}},
 }
 
-// RenderSupabaseTemplate renders t with Supabase's placeholders in place of
+// RenderAuthTemplate renders t with GoTrue's placeholders in place of
 // the link and the app's URL.
-func (r *Renderer) RenderSupabaseTemplate(t SupabaseTemplate) (string, error) {
+func (r *Renderer) RenderAuthTemplate(t AuthTemplate) (string, error) {
 	e := t.Email
 	e.URL = urlSentinel
 	site := *r
@@ -90,14 +90,14 @@ func (r *Renderer) RenderSupabaseTemplate(t SupabaseTemplate) (string, error) {
 	return strings.ReplaceAll(html, siteSentinel, "{{ .SiteURL }}"), nil
 }
 
-// ExportSupabaseTemplates writes <dir>/<kind>.html for every Supabase template.
-func (r *Renderer) ExportSupabaseTemplates(dir string) ([]string, error) {
+// ExportAuthTemplates writes <dir>/<kind>.html for every Auth template.
+func (r *Renderer) ExportAuthTemplates(dir string) ([]string, error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return nil, err
 	}
 	var written []string
-	for _, t := range SupabaseTemplates {
-		html, err := r.RenderSupabaseTemplate(t)
+	for _, t := range AuthTemplates {
+		html, err := r.RenderAuthTemplate(t)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", t.Kind, err)
 		}

@@ -28,7 +28,7 @@ func TestGenerateGoTrueKeys(t *testing.T) {
 	set, _ := json.Marshal(map[string]any{"keys": []any{pub}})
 	kf, err := keyfunc.NewJWKSetJSON(set)
 	require.NoError(t, err)
-	for role, tok := range map[string]string{"anon": k.AnonKey, "service_role": k.ServiceRoleKey} {
+	for role, tok := range map[string]string{"service_role": k.ServiceRoleKey} {
 		var c jwt.MapClaims
 		_, err := jwt.ParseWithClaims(tok, &c, kf.Keyfunc, jwt.WithValidMethods([]string{"ES256"}), jwt.WithExpirationRequired())
 		require.NoError(t, err, role)

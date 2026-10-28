@@ -1,5 +1,5 @@
-// Package supabase is a minimal client for the Supabase Auth admin API.
-package supabase
+// Package gotrue is a minimal client for the GoTrue (Auth server) admin API.
+package gotrue
 
 import (
 	"bytes"
@@ -22,7 +22,7 @@ var (
 	ErrUserExists = errors.New("user already exists")
 )
 
-// APIError is an error response from Supabase Auth.
+// APIError is an error response from GoTrue.
 type APIError struct {
 	Status int
 	Code   string `json:"error_code"`
@@ -30,7 +30,7 @@ type APIError struct {
 }
 
 func (e *APIError) Error() string {
-	return fmt.Sprintf("supabase auth: %d %s: %s", e.Status, e.Code, e.Msg)
+	return fmt.Sprintf("gotrue: %d %s: %s", e.Status, e.Code, e.Msg)
 }
 
 // WeakPassword reports whether the password was rejected by the policy.
@@ -175,7 +175,7 @@ func (a *Admin) request(ctx context.Context, method, target string, body, out an
 	}
 	resp, err := a.http.Do(req)
 	if err != nil {
-		return fmt.Errorf("supabase auth: %w", err)
+		return fmt.Errorf("gotrue: %w", err)
 	}
 	defer resp.Body.Close() //nolint:errcheck
 	if resp.StatusCode >= 300 {

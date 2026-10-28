@@ -17,7 +17,7 @@ var migrateCmd = &cobra.Command{
 	Use:   "migrate",
 	Short: "Apply the database migrations (migrations_dir) that are not applied yet",
 	Long: `Apply the SQL files in migrations_dir (backend/db/migrations; /migrations in the
-image) that are not recorded in supabase_migrations.schema_migrations, each in
+image) that are not recorded in noonside_migrations.schema_migrations, each in
 its own transaction. The Auth server (GoTrue) must have created the auth
 schema first: the first migration references auth.users. With --wait it waits
 for the database and for auth.users (the chart runs it as an init container

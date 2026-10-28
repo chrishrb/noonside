@@ -1,5 +1,5 @@
 // Package identity is the identity module: user profiles and accounts.
-// Accounts live in Supabase Auth; this module reads public.profiles (kept in
+// Accounts live in GoTrue; this module reads public.profiles (kept in
 // sync by a trigger) and auth.users, and creates accounts through the Auth
 // admin API. It owns the table profiles.
 package identity
@@ -13,16 +13,16 @@ import (
 
 	"github.com/chrishrb/noonside/internal/platform/auth"
 	"github.com/chrishrb/noonside/internal/platform/db"
+	"github.com/chrishrb/noonside/internal/platform/gotrue"
 	"github.com/chrishrb/noonside/internal/platform/media"
-	"github.com/chrishrb/noonside/internal/platform/supabase"
 	"github.com/google/uuid"
 )
 
-// UserAdmin manages Supabase Auth accounts (implemented by supabase.Admin).
+// UserAdmin manages GoTrue accounts (implemented by gotrue.Admin).
 type UserAdmin interface {
-	CreateUser(ctx context.Context, r supabase.CreateUserRequest) (*supabase.User, error)
-	SetAppMetadata(ctx context.Context, id uuid.UUID, values map[string]any) (*supabase.User, error)
-	UpdateUser(ctx context.Context, id uuid.UUID, r supabase.UserUpdate) (*supabase.User, error)
+	CreateUser(ctx context.Context, r gotrue.CreateUserRequest) (*gotrue.User, error)
+	SetAppMetadata(ctx context.Context, id uuid.UUID, values map[string]any) (*gotrue.User, error)
+	UpdateUser(ctx context.Context, id uuid.UUID, r gotrue.UserUpdate) (*gotrue.User, error)
 	DeleteUser(ctx context.Context, id uuid.UUID) error
 	SendRecovery(ctx context.Context, email, redirectTo string) error
 }
@@ -66,9 +66,9 @@ type NewUser struct {
 }
 
 // CreateUser creates a confirmed account. Errors are those of the admin API
-// (supabase.ErrUserExists, *supabase.APIError).
+// (gotrue.ErrUserExists, *gotrue.APIError).
 func (m *Module) CreateUser(ctx context.Context, u NewUser) (uuid.UUID, error) {
-	created, err := m.admin.CreateUser(ctx, supabase.CreateUserRequest{
+	created, err := m.admin.CreateUser(ctx, gotrue.CreateUserRequest{
 		Email: NormalizeEmail(u.Email), Password: u.Password, Name: strings.TrimSpace(u.Name), EmailConfirmed: true,
 	})
 	if err != nil {
@@ -89,7 +89,7 @@ func (m *Module) SetSuperadmin(ctx context.Context, id uuid.UUID, on bool) error
 	return err
 }
 
-// Profile mirrors a Supabase Auth user (public.profiles, synced by trigger).
+// Profile mirrors a GoTrue user (public.profiles, synced by trigger).
 type Profile struct {
 	ID    uuid.UUID
 	Email string
@@ -101,12 +101,12 @@ type Profile struct {
 	UpdatedAt time.Time
 }
 
-// Account is a profile plus the Supabase Auth fields superadmins see.
+// Account is a profile plus the GoTrue fields superadmins see.
 type Account struct {
 	Profile
 	Superadmin   bool
 	LastSignInAt *time.Time
-	// Disabled accounts are banned in Supabase Auth and cannot sign in.
+	// Disabled accounts are banned in GoTrue and cannot sign in.
 	Disabled bool
 	Systems  []AccountSystem
 }

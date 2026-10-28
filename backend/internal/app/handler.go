@@ -44,13 +44,13 @@ func (*apiHandler) NewError(ctx context.Context, err error) *generated.ErrorStat
 	return httpapi.NewError(ctx, err)
 }
 
-// TokenVerifier validates Supabase access tokens (implemented by
+// TokenVerifier validates GoTrue access tokens (implemented by
 // auth.Verifier).
 type TokenVerifier interface {
 	Verify(token string) (*auth.Principal, error)
 }
 
-// security authenticates requests: users by their Supabase access token,
+// security authenticates requests: users by their GoTrue access token,
 // devices and integrations by a system's API key, the hosted FTP server by
 // its hook token.
 type security struct {

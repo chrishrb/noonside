@@ -94,7 +94,7 @@ func (k *testKeys) sign(t *testing.T, c jwt.MapClaims) string {
 	return s
 }
 
-func TestVerifierAcceptsSupabaseToken(t *testing.T) {
+func TestVerifierAcceptsGoTrueToken(t *testing.T) {
 	k := newTestKeys(t, "")
 	uid := uuid.New()
 	p, err := k.v.Verify(k.sign(t, claims(uid.String(), nil)))
@@ -112,7 +112,7 @@ func TestVerifierAcceptsSupabaseToken(t *testing.T) {
 
 // The server fetches the keys from GoTrue directly, while the tokens name
 // the public URL as issuer.
-func TestVerifierSeparateAuthURL(t *testing.T) {
+func TestVerifierInternalURL(t *testing.T) {
 	k := newTestKeys(t, "")
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/.well-known/jwks.json" {
@@ -124,7 +124,7 @@ func TestVerifierSeparateAuthURL(t *testing.T) {
 	defer srv.Close()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	v, err := NewVerifier(ctx, VerifierConfig{URL: "https://app.example.com/", AuthURL: srv.URL + "/"})
+	v, err := NewVerifier(ctx, VerifierConfig{URL: "https://app.example.com/auth/v1/", InternalURL: srv.URL + "/"})
 	require.NoError(t, err)
 
 	uid := uuid.New()
@@ -203,7 +203,7 @@ func TestJWKSRefreshErrorLevel(t *testing.T) {
 		h := refreshErrorHandler(slog.New(rec), func(context.Context) bool { return true })
 		ctx, cancel := context.WithTimeout(context.Background(), 0)
 		defer cancel()
-		h("https://x.supabase.co/auth/v1/.well-known/jwks.json")(ctx, context.DeadlineExceeded)
+		h("https://noonside.example.com/auth/v1/.well-known/jwks.json")(ctx, context.DeadlineExceeded)
 		assert.Equal(t, []slog.Level{slog.LevelWarn}, rec.got)
 	})
 	t.Run("no keys: error", func(t *testing.T) {

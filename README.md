@@ -10,7 +10,7 @@ Monitoring for photovoltaic systems: a Go API and a React SPA, deployed with a H
 - **Prices and advice:** day-ahead prices (aWATTar or ENTSO-E), energy fed in at negative prices (§ 51 EEG), and the best window today for large loads. noonside gives advice and signals; it never switches devices.
 - **Integrations:** signed webhooks per system (alerts, daily summary, surplus forecast) for Home Assistant, Node-RED or n8n, a read API for Home Assistant or Grafana, and upload to PVOutput.
 - **Sharing:** read-only public links to a system, with a kiosk mode for large screens.
-- **App:** English and German, light and dark, installable as a PWA with push on phones. Accounts, sign-in and password reset are handled by a self-hosted GoTrue (Supabase Auth); errors and "Report a problem" go to Sentry.
+- **App:** English and German, light and dark, installable as a PWA with push on phones. Accounts, sign-in and password reset are handled by a self-hosted [GoTrue](https://github.com/supabase/auth) (the Auth server); errors and "Report a problem" go to Sentry.
 
 ## Product tour
 
@@ -91,7 +91,7 @@ Screenshots from a local stack with demo data (`mise run docs:screens`). The app
 |---|---|
 | API | Go, stdlib `net/http`, spec-first with [ogen](https://github.com/ogen-go/ogen) (`backend/internal/platform/httpapi/api.yaml`) |
 | Database | Postgres 17 (CloudNativePG in production), pgx with hand-written SQL, migrations in `backend/db/migrations/` (`noonside migrate`) |
-| Auth | GoTrue (Supabase Auth, self-hosted) under `/auth/v1` of the app's origin. The SPA signs in with supabase-js, and the API verifies the access token (JWKS). |
+| Auth | [GoTrue](https://github.com/supabase/auth) (self-hosted) under `/auth/v1` of the app's origin. The SPA signs in with `@supabase/auth-js`, and the API verifies the access token (JWKS). |
 | Web | React 19, Vite, TypeScript, TanStack Query, Tailwind v4 (`web/`) |
 | Email | go-mail + `html/template` (also renders GoTrue's email templates) |
 | Errors | Sentry (optional) in the API and the SPA |
@@ -159,22 +159,22 @@ backend/bin/noonside import solarlog DIR --system ID
 
 ## Configuration
 
-Settings come from `backend/config/default_config.yml`, merged with `backend/config/<ENVIRONMENT>_config.yml`. Environment variables override both, e.g. `HTTP_PORT`, `PUBLIC_URL`, `SUPABASE_URL`, `CORS_ALLOWED_ORIGINS`, `SCHEDULER_ENABLED`, `SMTP_HOST`, `MAIL_FROM`. `prod_config.yml` only holds generic production defaults; everything specific to an installation comes from the Helm values.
+Settings come from `backend/config/default_config.yml`, merged with `backend/config/<ENVIRONMENT>_config.yml`. Environment variables override both, e.g. `HTTP_PORT`, `PUBLIC_URL`, `AUTH_URL`, `AUTH_INTERNAL_URL`, `CORS_ALLOWED_ORIGINS`, `SCHEDULER_ENABLED`, `SMTP_HOST`, `MAIL_FROM`. `prod_config.yml` only holds generic production defaults; everything specific to an installation comes from the Helm values.
 
 Secrets are only read from the environment:
 
 | Variable | Purpose |
 |---|---|
 | `DATABASE_URL` | Postgres, as URL or `key=value` string; libpq variables (`PGUSER`, `PGPASSWORD`, …) fill in the rest. |
-| `SUPABASE_SECRET_KEY` | GoTrue's service_role key for its admin API (user creation, superadmin flag); `noonside keygen gotrue` |
-| `SUPABASE_JWT_SECRET` | Optional, for legacy HS256 tokens |
+| `AUTH_SERVICE_ROLE_KEY` | GoTrue's service_role key for its admin API (user creation, superadmin flag); `noonside keygen gotrue` |
+| `AUTH_JWT_SECRET` | Optional, for legacy HS256 tokens |
 | `SECRET_KEY` | Encrypts data source passwords at rest (`noonside keygen`) |
 | `SMTP_PASSWORD` | Outgoing email |
 | `VAPID_PRIVATE_KEY` | Optional. Signs Web Push notifications; the public key is `vapid_public_key` (`noonside keygen vapid`). Without it push is off. |
 | `SFTPGO_ADMIN_PASSWORD` | Optional. SFTPGo's admin password; with `hosted_ftp_api_url` it turns on hosted FTP (see below). |
 | `ENTSOE_API_TOKEN`, `OPEN_METEO_API_KEY` | Optional. Day-ahead prices from ENTSO-E; Open-Meteo's commercial API. |
 
-The server reaches GoTrue at `supabase_internal_url` (in the cluster `http://<release>-noonside-auth:9999`), else at `<supabase_url>/auth/v1`; tokens are issued for `<supabase_url>/auth/v1`.
+The server reaches GoTrue at `auth_internal_url` (in the cluster `http://<release>-noonside-auth:9999`), else at its public URL `auth_url` (default `<public_url>/auth/v1`), which is also the tokens' issuer.
 
 ## Deployment
 
@@ -197,7 +197,7 @@ Gateway (Gateway API HTTPRoute)  noonside.example.com
   - All values, with comments: `deploy/helm/noonside/values.yaml`. `ci/test-values.yaml` switches everything on.
 - **Values you set** (non-secret, e.g. in a Flux HelmRelease): `host`, `smtp.*`, `vapidPublicKey`, `route.parentRefs`, optionally `landingUrl`, `sentry.*`, `postgres.backup.*`, `hostedFtp.*`.
 - **Secrets the chart expects** (create them yourself, e.g. with external-secrets):
-  - `api.existingSecret` (default `noonside-secret`): `SECRET_KEY`, `SMTP_PASSWORD`, `VAPID_PRIVATE_KEY`, `SUPABASE_SECRET_KEY`, optional tokens.
+  - `api.existingSecret` (default `noonside-secret`): `SECRET_KEY`, `SMTP_PASSWORD`, `VAPID_PRIVATE_KEY`, `AUTH_SERVICE_ROLE_KEY`, optional tokens.
   - `auth.existingSecret` (default `noonside-auth`): `GOTRUE_JWT_KEYS`, `GOTRUE_JWT_SECRET` (`noonside keygen gotrue`), `GOTRUE_SMTP_PASS`.
   - `postgres.authRoleSecret` (default `noonside-pg-auth`): basic-auth secret of `supabase_auth_admin`.
   - With backups: `postgres.backup.s3.credentials.existingSecret` (access key, optional region).
@@ -255,8 +255,8 @@ There are two images: `backend/Dockerfile` (built from `backend/`; distroless: t
 
 ```sh
 docker run --rm -e DATABASE_URL=… noonside-api:dev migrate --wait 5m
-docker run -p 8080:8080 -e DATABASE_URL=… -e SUPABASE_URL=https://<host> -e SUPABASE_INTERNAL_URL=http://<gotrue>:9999 \
-  -e SUPABASE_SECRET_KEY=… -v noonside-media:/data/media noonside-api:dev
+docker run -p 8080:8080 -e DATABASE_URL=… -e PUBLIC_URL=https://<host> -e AUTH_INTERNAL_URL=http://<gotrue>:9999 \
+  -e AUTH_SERVICE_ROLE_KEY=… -v noonside-media:/data/media noonside-api:dev
 docker run -p 8081:8080 -e SENTRY_DSN=… noonside-web:dev
 ```
 

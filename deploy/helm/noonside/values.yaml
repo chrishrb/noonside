@@ -19,7 +19,7 @@ api:
     tag: ""
     pullPolicy: IfNotPresent
   # Secret with the API's secrets as env vars: SECRET_KEY, SMTP_PASSWORD,
-  # VAPID_PRIVATE_KEY, SUPABASE_SECRET_KEY (GoTrue's service_role key, see
+  # VAPID_PRIVATE_KEY, AUTH_SERVICE_ROLE_KEY (GoTrue's service_role key, see
   # `noonside keygen gotrue`), optional ENTSOE_API_TOKEN, OPEN_METEO_API_KEY.
   existingSecret: noonside-secret
   # Plain env vars on top of the config file and the values below.

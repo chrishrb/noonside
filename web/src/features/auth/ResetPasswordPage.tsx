@@ -16,7 +16,7 @@ import { newPasswordFields, passwordsMatch } from './passwords';
 
 const schema = z.object(newPasswordFields).refine(...passwordsMatch);
 
-/** Target of the recovery email; supabase-js signs the user in from the link. */
+/** Target of the recovery email; the auth client signs the user in from the link. */
 export function ResetPasswordPage() {
   const { t } = useTranslation();
   const { session, ready, updatePassword } = useAuth();

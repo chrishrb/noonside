@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/chrishrb/noonside/internal/platform/db"
-	"github.com/chrishrb/noonside/internal/platform/supabase"
+	"github.com/chrishrb/noonside/internal/platform/gotrue"
 	"github.com/google/uuid"
 )
 
@@ -32,7 +32,7 @@ type UserChanges struct {
 }
 
 // UpdateUser applies the changes. Errors are those of the admin API
-// (supabase.ErrUserExists for a taken email) or db.ErrNotFound.
+// (gotrue.ErrUserExists for a taken email) or db.ErrNotFound.
 func (m *Module) UpdateUser(ctx context.Context, id uuid.UUID, c UserChanges) error {
 	prof, err := m.GetProfile(ctx, id)
 	if err != nil {
@@ -42,13 +42,13 @@ func (m *Module) UpdateUser(ctx context.Context, id uuid.UUID, c UserChanges) er
 	if c.Name != nil {
 		name = strings.TrimSpace(*c.Name)
 	}
-	var upd supabase.UserUpdate
+	var upd gotrue.UserUpdate
 	if c.Email != nil {
 		if email := NormalizeEmail(*c.Email); email != prof.Email {
-			// Supabase answers a taken address with a 500 (unique violation).
+			// GoTrue answers a taken address with a 500 (unique violation).
 			switch other, err := m.GetProfileByEmail(ctx, email); {
 			case err == nil && other.ID != id:
-				return supabase.ErrUserExists
+				return gotrue.ErrUserExists
 			case err != nil && !errors.Is(err, db.ErrNotFound):
 				return err
 			}
@@ -89,7 +89,7 @@ func (m *Module) UpdateUser(ctx context.Context, id uuid.UUID, c UserChanges) er
 // the profile trigger reads on later email changes.
 func (m *Module) RenameUser(ctx context.Context, id uuid.UUID, name string) (*Profile, error) {
 	name = strings.TrimSpace(name)
-	if _, err := m.admin.UpdateUser(ctx, id, supabase.UserUpdate{UserMetadata: map[string]any{"name": name}}); err != nil {
+	if _, err := m.admin.UpdateUser(ctx, id, gotrue.UserUpdate{UserMetadata: map[string]any{"name": name}}); err != nil {
 		return nil, err
 	}
 	return m.UpdateProfileName(ctx, id, name)

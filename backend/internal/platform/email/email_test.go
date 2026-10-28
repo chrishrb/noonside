@@ -112,16 +112,16 @@ func TestFuncs(t *testing.T) {
 	assert.True(t, strings.HasPrefix(funcs["title"].(func(string) string)("viewer"), "V"))
 }
 
-func TestSupabaseTemplates(t *testing.T) {
+func TestAuthTemplates(t *testing.T) {
 	r, err := NewRenderer(testApp)
 	require.NoError(t, err)
-	for _, tpl := range SupabaseTemplates {
-		html, err := r.RenderSupabaseTemplate(tpl)
+	for _, tpl := range AuthTemplates {
+		html, err := r.RenderAuthTemplate(tpl)
 		require.NoError(t, err)
 		assert.Contains(t, html, `href="{{ .ConfirmationURL }}"`, tpl.Kind)
-		assert.NotContains(t, html, "supabase-confirmation-url", tpl.Kind)
+		assert.NotContains(t, html, "gotrue-confirmation-url", tpl.Kind)
 		assert.Contains(t, html, `href="{{ .SiteURL }}"`, tpl.Kind)
-		assert.NotContains(t, html, "supabase-site-url", tpl.Kind)
+		assert.NotContains(t, html, "gotrue-site-url", tpl.Kind)
 		assert.Contains(t, html, tpl.Email.Title, tpl.Kind)
 	}
 }

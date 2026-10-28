@@ -34,7 +34,7 @@ func TestMigrate(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(dir, version+"_test.sql"), []byte(sql), 0o600))
 	t.Cleanup(func() {
 		_, _ = d.Pool().Exec(ctx, "DROP TABLE IF EXISTS "+table)
-		_, _ = d.Pool().Exec(ctx, "DELETE FROM supabase_migrations.schema_migrations WHERE version = $1", version)
+		_, _ = d.Pool().Exec(ctx, "DELETE FROM noonside_migrations.schema_migrations WHERE version = $1", version)
 	})
 
 	ran, err = db.Migrate(ctx, d, dir)
@@ -58,6 +58,6 @@ func TestMigrate(t *testing.T) {
 	require.NoError(t, d.Pool().QueryRow(ctx, "SELECT count(*) FROM "+table).Scan(&n))
 	assert.Equal(t, 1, n)
 	require.NoError(t, d.Pool().QueryRow(ctx,
-		"SELECT count(*) FROM supabase_migrations.schema_migrations WHERE version = $1", badVersion).Scan(&n))
+		"SELECT count(*) FROM noonside_migrations.schema_migrations WHERE version = $1", badVersion).Scan(&n))
 	assert.Equal(t, 0, n)
 }

@@ -563,9 +563,9 @@ export const getInvitation = <ThrowOnError extends boolean = true>(options: Opti
 /**
  * Accept an invitation. Authenticated callers join with their account
  * (the invitation email must match). Unauthenticated callers must send
- * `name` and `password`: a Supabase account for the invited email is
- * created (email pre-confirmed by the invitation) and the client then
- * signs in with supabase-js.
+ * `name` and `password`: an account for the invited email is created
+ * (email pre-confirmed by the invitation) and the client then signs in
+ * with GoTrue.
  *
  */
 export const acceptInvitation = <ThrowOnError extends boolean = true>(options: Options<AcceptInvitationData, ThrowOnError>): RequestResult<AcceptInvitationResponses, AcceptInvitationErrors, ThrowOnError> => (options.client ?? client).post<AcceptInvitationResponses, AcceptInvitationErrors, ThrowOnError>({

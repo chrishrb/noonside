@@ -8,10 +8,10 @@ import (
 	"time"
 
 	"github.com/chrishrb/noonside/internal/modules/datasources/adapter"
+	"github.com/chrishrb/noonside/internal/modules/datasources/hostedftp"
 	"github.com/chrishrb/noonside/internal/modules/datasources/pvoutput"
 	"github.com/chrishrb/noonside/internal/modules/datasources/solarlog"
 	"github.com/chrishrb/noonside/internal/modules/datasources/solarlog/storage"
-	"github.com/chrishrb/noonside/internal/modules/datasources/hostedftp"
 	"github.com/chrishrb/noonside/internal/modules/systems"
 	"github.com/chrishrb/noonside/internal/modules/telemetry"
 	"github.com/chrishrb/noonside/internal/platform/secretbox"

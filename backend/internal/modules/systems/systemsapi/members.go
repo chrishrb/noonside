@@ -12,9 +12,9 @@ import (
 	"github.com/chrishrb/noonside/internal/platform/auth"
 	"github.com/chrishrb/noonside/internal/platform/db"
 	"github.com/chrishrb/noonside/internal/platform/email"
+	"github.com/chrishrb/noonside/internal/platform/gotrue"
 	"github.com/chrishrb/noonside/internal/platform/httpapi"
 	"github.com/chrishrb/noonside/internal/platform/httpapi/generated"
-	"github.com/chrishrb/noonside/internal/platform/supabase"
 	"github.com/google/uuid"
 )
 
@@ -273,7 +273,7 @@ func (h *Handler) AcceptInvitation(ctx context.Context, req generated.OptAcceptI
 	var userID uuid.UUID
 	created := false
 	if p := auth.FromContext(ctx); p != nil && p.IsUser() {
-		// Supabase only issues tokens for confirmed addresses (sign-up is
+		// GoTrue only issues tokens for confirmed addresses (sign-up is
 		// disabled; accounts are created pre-confirmed below or by an admin).
 		if p.Email != inv.Email {
 			return nil, httpapi.Forbidden("invitation was sent to a different email address")
@@ -293,9 +293,9 @@ func (h *Handler) AcceptInvitation(ctx context.Context, req generated.OptAcceptI
 		}
 		// The invitation link proves ownership of the address.
 		id, err := h.identity.CreateUser(ctx, identity.NewUser{Email: inv.Email, Password: password, Name: name})
-		var ae *supabase.APIError
+		var ae *gotrue.APIError
 		switch {
-		case errors.Is(err, supabase.ErrUserExists):
+		case errors.Is(err, gotrue.ErrUserExists):
 			return nil, httpapi.Unauthorized("an account for this email exists; sign in to accept the invitation")
 		case errors.As(err, &ae) && ae.WeakPassword():
 			return nil, httpapi.BadRequest(ae.Msg)

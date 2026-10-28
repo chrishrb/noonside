@@ -1,5 +1,5 @@
 -- Database bootstrap: the roles, schemas and extensions that the Auth server
--- (GoTrue) and backend/db/migrations expect, as Supabase used to provide them. Run
+-- (GoTrue) and backend/db/migrations expect (GoTrue's own role names). Run
 -- once by a superuser in the app database, before GoTrue starts and before
 -- `noonside migrate`:
 --   - in the cluster by the chart's CNPG Cluster (postInitApplicationSQLRefs),

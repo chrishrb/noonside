@@ -27,7 +27,7 @@ func TestReadMigrations(t *testing.T) {
 
 // The repository's migrations parse.
 func TestRepoMigrations(t *testing.T) {
-	ms, err := ReadMigrations("../../../../db/migrations")
+	ms, err := ReadMigrations("../../../db/migrations")
 	require.NoError(t, err)
 	assert.NotEmpty(t, ms)
 }

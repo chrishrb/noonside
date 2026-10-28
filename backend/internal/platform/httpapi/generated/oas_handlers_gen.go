@@ -31,9 +31,8 @@ func recordError(string, error) {}
 // handleAcceptInvitationRequest handles acceptInvitation operation.
 //
 // Accept an invitation. Authenticated callers join with their account (the invitation email must
-// match). Unauthenticated callers must send `name` and `password`: a Supabase account for the invited
-// email is created (email pre-confirmed by the invitation) and the client then signs in with
-// supabase-js.
+// match). Unauthenticated callers must send `name` and `password`: an account for the invited email is
+// created (email pre-confirmed by the invitation) and the client then signs in with GoTrue.
 //
 // POST /invitations/{token}/accept
 func (s *Server) handleAcceptInvitationRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {

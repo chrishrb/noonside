@@ -13,24 +13,21 @@ import (
 	"github.com/google/uuid"
 )
 
-// GoTrueKeys are the secrets of a self-hosted Supabase Auth (GoTrue) server.
+// GoTrueKeys are the secrets of a self-hosted GoTrue server.
 type GoTrueKeys struct {
 	// JWTKeys is GOTRUE_JWT_KEYS: a JSON array with one ES256 private JWK,
 	// used to sign access tokens and published (public part) at
 	// /.well-known/jwks.json, where the Verifier fetches it.
 	JWTKeys string
 	// JWTSecret is GOTRUE_JWT_SECRET (HS256), which GoTrue still requires;
-	// the Verifier doesn't accept HS256 unless SUPABASE_JWT_SECRET is set.
+	// the Verifier doesn't accept HS256 unless AUTH_JWT_SECRET is set.
 	JWTSecret string
-	// AnonKey is the publishable key (VITE_SUPABASE_PUBLISHABLE_KEY); not
-	// secret.
-	AnonKey string
-	// ServiceRoleKey is SUPABASE_SECRET_KEY: GoTrue's admin API accepts it.
+	// ServiceRoleKey is AUTH_SERVICE_ROLE_KEY: GoTrue's admin API accepts it.
 	ServiceRoleKey string
 }
 
-// GenerateGoTrueKeys creates a signing key and the anon and service role
-// tokens signed with it, valid for validity.
+// GenerateGoTrueKeys creates a signing key and the service role token
+// signed with it, valid for validity.
 func GenerateGoTrueKeys(validity time.Duration) (*GoTrueKeys, error) {
 	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
@@ -69,10 +66,6 @@ func GenerateGoTrueKeys(validity time.Duration) (*GoTrueKeys, error) {
 		t.Header["kid"] = kid
 		return t.SignedString(priv)
 	}
-	anon, err := token("anon")
-	if err != nil {
-		return nil, fmt.Errorf("sign anon key: %w", err)
-	}
 	service, err := token("service_role")
 	if err != nil {
 		return nil, fmt.Errorf("sign service role key: %w", err)
@@ -80,7 +73,6 @@ func GenerateGoTrueKeys(validity time.Duration) (*GoTrueKeys, error) {
 	return &GoTrueKeys{
 		JWTKeys:        string(keys),
 		JWTSecret:      enc.EncodeToString(secret),
-		AnonKey:        anon,
 		ServiceRoleKey: service,
 	}, nil
 }

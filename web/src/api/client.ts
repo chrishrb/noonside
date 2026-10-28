@@ -1,4 +1,4 @@
-import { supabase } from '@/auth/supabase';
+import { authClient } from '@/auth/client';
 import i18n from '@/i18n';
 import { API_URL } from './config';
 import { client } from './gen/client.gen';
@@ -16,12 +16,12 @@ export class ApiError extends Error {
 }
 
 async function accessToken(): Promise<string | undefined> {
-  const { data } = await supabase.auth.getSession();
+  const { data } = await authClient.getSession();
   return data.session?.access_token;
 }
 
 // The generated SDK (./gen/sdk.gen) asks for a token for each security scheme
-// of an operation; the app only sends the Supabase access token (bearer).
+// of an operation; the app only sends the GoTrue access token (bearer).
 client.setConfig({ auth: (a) => (a.scheme === 'bearer' ? accessToken() : undefined) });
 
 // Error responses and network failures become ApiError, so every call either

@@ -9,7 +9,7 @@ async function signIn(page: Page, user: string, path: string) {
   await page.getByRole('button', { name: /Sign in|Anmelden/ }).click();
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
   await expect(page).not.toHaveURL(/\/login/);
-  // The Supabase session lives in localStorage, which storageState keeps.
+  // The GoTrue session lives in localStorage, which storageState keeps.
   await page.context().storageState({ path });
 }
 

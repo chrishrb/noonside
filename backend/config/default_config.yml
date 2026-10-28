@@ -110,18 +110,17 @@ hosted_ftp_quota_mb: 200
 hosted_ftp_retention_days: 14
 # Hosted sources across all systems (0: no limit).
 hosted_ftp_max_accounts: 0
-# Public URL the SPA signs in at: the Auth server (GoTrue) is reached as
-# <supabase_url>/auth/v1, which is also the tokens' issuer. In production the
-# app's own origin.
-supabase_url: ""
+# GoTrue's public URL, the issuer of its tokens; empty: <public_url>/auth/v1
+# (the gateway in production, the Vite proxy in dev).
+auth_url: ""
 # Where the server reaches GoTrue directly, e.g. http://noonside-auth:9999 in
-# the cluster (no /auth/v1 prefix). Empty: <supabase_url>/auth/v1.
-supabase_internal_url: ""
+# the cluster (no /auth/v1 prefix). Empty: auth_url.
+auth_internal_url: ""
 # Secrets must come from the environment:
 #   DATABASE_URL          Postgres connection (URL or key=value; libpq PG*
 #                         variables such as PGPASSWORD fill in the rest)
-#   SUPABASE_SECRET_KEY   service_role key of GoTrue's admin API (`noonside keygen gotrue`)
-#   SUPABASE_JWT_SECRET   optional legacy HS256 JWT secret
+#   AUTH_SERVICE_ROLE_KEY service_role key of GoTrue's admin API (`noonside keygen gotrue`)
+#   AUTH_JWT_SECRET       optional legacy HS256 JWT secret
 #   SMTP_PASSWORD         SMTP password
 #   SECRET_KEY            base64 32-byte key for data source passwords (`noonside keygen`)
 #   VAPID_PRIVATE_KEY     optional Web Push signing key (`noonside keygen vapid`)

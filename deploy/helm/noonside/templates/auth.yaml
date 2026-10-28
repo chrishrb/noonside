@@ -1,6 +1,6 @@
 {{- $origin := include "noonside.origin" . -}}
 {{- $templates := printf "http://%s:8080/auth-templates" (include "noonside.apiName" .) -}}
-# The Auth server (Supabase's GoTrue). The SPA signs in through /auth/v1 of the
+# The Auth server (GoTrue). The SPA signs in through /auth/v1 of the
 # app's origin (HTTPRoute); the API calls it in-cluster for its keys and the
 # admin API. Keep the settings in sync with compose.yaml.
 apiVersion: apps/v1

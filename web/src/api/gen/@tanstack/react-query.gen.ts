@@ -776,9 +776,9 @@ export const getInvitationOptions = (options: Options<GetInvitationData>) => que
 /**
  * Accept an invitation. Authenticated callers join with their account
  * (the invitation email must match). Unauthenticated callers must send
- * `name` and `password`: a Supabase account for the invited email is
- * created (email pre-confirmed by the invitation) and the client then
- * signs in with supabase-js.
+ * `name` and `password`: an account for the invited email is created
+ * (email pre-confirmed by the invitation) and the client then signs in
+ * with GoTrue.
  *
  */
 export const acceptInvitationMutation = (options?: Partial<Options<AcceptInvitationData>>): UseMutationOptions<AcceptInvitationResponse, AcceptInvitationError, Options<AcceptInvitationData>> => {

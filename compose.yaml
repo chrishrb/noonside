@@ -1,7 +1,6 @@
-# Local stack: the same pieces as production (deploy/helm/noonside), without
-# the Supabase CLI. `mise run db:up` starts it, `mise run db:reset` re-creates
-# the database. The keys below are local-only dev values (like the Supabase
-# CLI's public defaults); never use them anywhere else.
+# Local stack: the same pieces as production (deploy/helm/noonside).
+# `mise run db:up` starts it, `mise run db:reset` re-creates the database. The
+# keys below are local-only dev values; never use them anywhere else.
 #
 #   Postgres  127.0.0.1:54322  postgres/postgres, database postgres
 #   Auth      127.0.0.1:9999   GoTrue; the SPA reaches it as /auth/v1 through Vite
@@ -15,8 +14,8 @@
 name: noonside
 
 x-dev-keys:
-  # `noonside keygen gotrue`; SUPABASE_SECRET_KEY/ANON_KEY in mise.toml and
-  # backend/config/dev_config.yml are signed with it.
+  # `noonside keygen gotrue`; AUTH_SERVICE_ROLE_KEY (vars.dev_secret_key in
+  # mise.toml) is signed with it.
   jwt-keys: &jwt-keys '[{"alg":"ES256","crv":"P-256","d":"xYuPxzSpjnMwGshQcwGHHTSo-OTd9YIVcMH-beQElOc","ext":true,"key_ops":["sign","verify"],"kid":"8ccfa7e2-712f-4c86-b54c-0d734010bcdf","kty":"EC","use":"sig","x":"08QiX2eGHrYwivSCNerc1lGjnSSUTyYqsrPCX0N01tE","y":"ixjH9OojMaQ4qqkDG6NP9bnkGX5K3Axq4F8u4ao8qsM"}]'
   jwt-secret: &jwt-secret zwXYsZdHuKvQIZuunWnfHRguA5R6gkjIsk0t7HB1ZeTMwVxtMBDW5EXehNsigwAT
 
@@ -98,7 +97,7 @@ services:
       GOTRUE_SMTP_ADMIN_EMAIL: noreply@noonside.local
       GOTRUE_SMTP_SENDER_NAME: noonside
       GOTRUE_SMTP_MAX_FREQUENCY: 1s
-      # Like supabase/config.toml had it (email_sent counts per hour).
+      # Effectively unlimited locally (email_sent counts per hour).
       GOTRUE_RATE_LIMIT_EMAIL_SENT: "360000"
       GOTRUE_RATE_LIMIT_TOKEN_REFRESH: "150"
       GOTRUE_RATE_LIMIT_VERIFY: "30"

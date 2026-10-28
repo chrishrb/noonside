@@ -20,8 +20,8 @@ import (
 
 // Config selects the Sentry project. An empty DSN disables reporting.
 type Config struct {
-	DSN              string
-	Environment      string
+	DSN         string
+	Environment string
 	// TracesSampleRate is the share of API requests traced (unless the
 	// browser decided), JobTracesSampleRate that of scheduler jobs and data
 	// source runs.
