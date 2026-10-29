@@ -10,11 +10,11 @@ Monitoring for photovoltaic systems: a Go API and a React SPA, deployed with a H
 - **Prices and advice:** day-ahead prices (aWATTar or ENTSO-E), energy fed in at negative prices (§ 51 EEG), and the best window today for large loads. noonside gives advice and signals; it never switches devices.
 - **Integrations:** signed webhooks per system (alerts, daily summary, surplus forecast) for Home Assistant, Node-RED or n8n, a read API for Home Assistant or Grafana, and upload to PVOutput.
 - **Sharing:** read-only public links to a system, with a kiosk mode for large screens.
-- **App:** English and German, light and dark, installable as a PWA with push on phones. Accounts, sign-in and password reset are handled by a self-hosted [GoTrue](https://github.com/supabase/auth) (the Auth server); errors and "Report a problem" go to Sentry.
+- **App:** English, German and Spanish, light and dark, installable as a PWA with push on phones. Accounts, sign-in and password reset are handled by a self-hosted [GoTrue](https://github.com/supabase/auth) (the Auth server); errors and "Report a problem" go to Sentry.
 
 ## Product tour
 
-Screenshots from a local stack with demo data (`mise run docs:screens`). The app is available in English and German, and in light and dark mode.
+Screenshots from a local stack with demo data (`mise run docs:screens`). The app is available in English, German and Spanish, and in light and dark mode.
 
 <table>
 <tr>

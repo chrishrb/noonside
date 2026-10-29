@@ -39,16 +39,26 @@ var phrases = map[string]map[string]string{
 		"footer":      "Sie erhalten diesen Bericht, weil Sie ihn in Ihren Benachrichtigungseinstellungen auf noonside gewählt haben.",
 		"notif_title": "%s: %s %s", "notif_body": "%s erzeugt.", "notif_body_pct": "%s erzeugt, %s des erwarteten Ertrags.",
 	},
+	"es": {
+		KindDaily: "Informe diario", KindWeekly: "Informe semanal", KindMonthly: "Informe mensual", KindYearly: "Informe anual",
+		"subject":    "%s · %s %s",
+		"intro":      "%s produjo %s %s.",
+		"when_daily": "el %s", "when_weekly": "en la semana %s", "when_monthly": "en %s", "when_yearly": "en %s",
+		"intro_pct": " Es el %s de la producción esperada.", "intro_target_pct": " Es el %s del objetivo.",
+		"energy": "Producción", "specific": "Rendimiento específico", "expected": "Esperado", "target": "Objetivo",
+		"best_day": "Mejor día", "previous": "Año anterior", "revenue": "Remuneración", "co2": "CO₂ evitado",
+		"inverters": "Inversores", "alerts": "Alertas en este periodo", "no_alerts": "Ninguna alerta en este periodo.",
+		"open": "Abrir el resumen", "manage": "Gestionar informes",
+		"footer":      "Recibe este informe porque lo eligió en los ajustes de notificaciones de noonside.",
+		"notif_title": "%s: %s %s", "notif_body": "%s producidos.", "notif_body_pct": "%s producidos, %s de la producción esperada.",
+	},
 }
 
 var monthsDE = []string{"Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"}
+var monthsES = []string{"enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"}
+var monthsESShort = []string{"ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sept", "oct", "nov", "dic"}
 
-func norm(l string) string {
-	if strings.HasPrefix(strings.ToLower(l), "de") {
-		return "de"
-	}
-	return "en"
-}
+func norm(l string) string { return notifications.NormLocale(l) }
 
 func phrase(l, key string) string { return phrases[l][key] }
 
@@ -176,10 +186,14 @@ func PeriodLabel(l string, rep *Report) string {
 	case KindWeekly:
 		return day(l, rep.From) + " – " + day(l, from.AddDate(0, 0, 6).Format(time.DateOnly))
 	case KindMonthly:
-		if l == "de" {
+		switch l {
+		case "de":
 			return monthsDE[from.Month()-1] + " " + strconv.Itoa(from.Year())
+		case "es":
+			return monthsES[from.Month()-1] + " " + strconv.Itoa(from.Year())
+		default:
+			return from.Format("January 2006")
 		}
-		return from.Format("January 2006")
 	}
 	return strconv.Itoa(from.Year())
 }
@@ -198,7 +212,7 @@ func number(l string, v float64, digits int) string {
 	s := strconv.FormatFloat(math.Abs(v), 'f', digits, 64)
 	intPart, frac, _ := strings.Cut(s, ".")
 	sep, dec := ",", "."
-	if l == "de" {
+	if l == "de" || l == "es" {
 		sep, dec = ".", ","
 	}
 	var b strings.Builder
@@ -222,15 +236,23 @@ func day(l, s string) string {
 	if err != nil {
 		return s
 	}
-	if l == "de" {
+	switch l {
+	case "de":
 		return t.Format("02.01.2006")
+	case "es":
+		return fmt.Sprintf("%d %s %d", t.Day(), monthsESShort[t.Month()-1], t.Year())
+	default:
+		return t.Format("Jan 2, 2006")
 	}
-	return t.Format("Jan 2, 2006")
 }
 
 func instant(l string, t time.Time) string {
-	if l == "de" {
+	switch l {
+	case "de":
 		return t.Format("02.01.2006 15:04")
+	case "es":
+		return fmt.Sprintf("%d %s %d %s", t.Day(), monthsESShort[t.Month()-1], t.Year(), t.Format("15:04"))
+	default:
+		return t.Format("Jan 2, 2006 15:04")
 	}
-	return t.Format("Jan 2, 2006 15:04")
 }

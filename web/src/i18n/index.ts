@@ -3,13 +3,14 @@ import { initReactI18next } from 'react-i18next';
 import { LANGUAGE, store } from '@/lib/storage';
 import { en } from './en';
 import { de } from './de';
+import { es } from './es';
 
-export const LANGUAGES = ['en', 'de'] as const;
+export const LANGUAGES = ['en', 'de', 'es'] as const;
 export type Language = (typeof LANGUAGES)[number];
 /** Language names in their own language, for the switcher. */
-export const LANGUAGE_NAMES: Record<Language, string> = { en: 'English', de: 'Deutsch' };
+export const LANGUAGE_NAMES: Record<Language, string> = { en: 'English', de: 'Deutsch', es: 'Español' };
 
-export const resources = { en: { translation: en }, de: { translation: de } } as const;
+export const resources = { en: { translation: en }, de: { translation: de }, es: { translation: es } } as const;
 
 const isLanguage = (v: string | null | undefined): v is Language => LANGUAGES.includes(v as Language);
 
@@ -40,7 +41,8 @@ i18n.on('languageChanged', syncHtmlLang);
 export const currentLanguage = (): Language => (isLanguage(i18n.resolvedLanguage) ? i18n.resolvedLanguage : 'en');
 
 /** BCP 47 locale for Intl formatting in the active language. */
-export const currentLocale = () => (currentLanguage() === 'de' ? 'de-DE' : 'en-GB');
+const INTL_LOCALES: Record<Language, string> = { en: 'en-GB', de: 'de-DE', es: 'es-ES' };
+export const currentLocale = () => INTL_LOCALES[currentLanguage()];
 
 /** Switches the UI language and remembers it in this browser. */
 export function setLanguage(l: Language) {

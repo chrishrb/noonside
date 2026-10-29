@@ -166,4 +166,22 @@ func TestNewRuleTexts(t *testing.T) {
 	assert.Contains(t, m.Body, "(8.0 kW) for at least 30 minutes a day on 4 of the last 7 days")
 	m = RenderAlert("en", KindFeedInCap, "Home", map[string]any{"percent": 70, "days": 3, "limit_w": 7000.0}, loc)
 	assert.Equal(t, "Home: power capped at 70 %", m.Title)
+	m = RenderAlert("es", KindLowYield, "Dach", map[string]any{"percent": 40, "day": "2026-06-14", "actual_kwh": 20.0, "expected_kwh": 50.5}, loc)
+	assert.Equal(t, "Solo el 40 % de la producción esperada el 14 jun 2026 (20,0 de 50,5 kWh).", m.Body)
+}
+
+func TestLocaleTextsComplete(t *testing.T) {
+	for l, texts := range alertTexts {
+		assert.Len(t, texts, len(alertTexts["en"]), l)
+		for k, v := range texts {
+			assert.NotEmpty(t, v.title, "%s %s title", l, k)
+			assert.NotEmpty(t, v.body, "%s %s body", l, k)
+		}
+	}
+	for l, p := range phrases {
+		assert.Len(t, p, len(phrases["en"]), l)
+		for k := range phrases["en"] {
+			assert.NotEmpty(t, p[k], "%s %s", l, k)
+		}
+	}
 }

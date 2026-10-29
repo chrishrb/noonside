@@ -43,6 +43,18 @@ var alertTexts = map[string]map[string]texts{
 		KindFeedInCap:         {"%[1]s: Leistung bei %[2]s begrenzt", "Die Leistung blieb an %[3]s der letzten 7 Tage bei etwa %[2]s der Spitzenleistung (%[4]s) stehen. Vermutlich ist eine Einspeisebegrenzung aktiv; die Energie darüber geht verloren."},
 		KindImplausibleData:   {"%[1]s sendet unplausible Werte", "%[2]s Werte vom %[3]s wurden als unplausibel verworfen: %[4]s. Prüfen Sie die Uhr des Wechselrichters, den Logger und die kWp in den Einstellungen."},
 	},
+	"es": {
+		KindNoData:            {"Sin datos de %[1]s", "No llegan datos desde hace %[2]s (último dato %[3]s)."},
+		KindInverterOffline:   {"%[1]s está desconectado", "Sin datos de este inversor desde hace %[2]s, mientras los demás informan (último dato %[3]s)."},
+		KindInverterError:     {"%[1]s informa de un error", "%[4]s desde %[3]s."},
+		KindDataSourceFailing: {"La fuente de datos %[1]s falla", "Ninguna ejecución correcta desde %[3]s: %[4]s"},
+		KindUnderperformance:  {"%[1]s produce menos de lo esperado", "Solo el %[2]s del rendimiento específico de los demás inversores%[4]s en los dos últimos días."},
+		KindZeroDay:           {"Sin producción en %[1]s", "Los inversores produjeron 0 kWh el %[3]s aunque llegaron datos."},
+		KindLowYield:          {"%[1]s produce menos de lo que el tiempo permitía", "Solo el %[2]s de la producción esperada el %[3]s (%[4]s)."},
+		KindClipping:          {"%[1]s está recortando", "La potencia se mantuvo en la potencia nominal de CA (%[4]s) al menos %[2]s al día en %[3]s de los últimos 7 días. Los módulos podrían entregar más de lo que el inversor convierte."},
+		KindFeedInCap:         {"%[1]s: potencia limitada al %[2]s", "La potencia se estancó en torno al %[2]s de la potencia pico (%[4]s) en %[3]s de los últimos 7 días. Probablemente hay un límite de inyección activo; la energía por encima se pierde."},
+		KindImplausibleData:   {"%[1]s envía valores inverosímiles", "Se descartaron %[2]s valores del %[3]s por inverosímiles: %[4]s. Compruebe el reloj del inversor, el registrador y los kWp en los ajustes."},
+	},
 }
 
 var phrases = map[string]map[string]string{
@@ -63,6 +75,15 @@ var phrases = map[string]map[string]string{
 		"unknown": "unbekannt", "never": "nie", "error": "Fehler %d",
 		"forecast_title": "%s: heute etwa %s kWh", "forecast_body": "Erwartet laut Wettervorhersage für den %s.",
 		"forecast_window": "Beste Zeit für große Verbraucher: %s–%s Uhr.",
+	},
+	"es": {
+		"reject_future": "hora en el futuro", "reject_negative_power": "potencia negativa",
+		"reject_power_above_limit": "potencia por encima de la nominal", "reject_eday_above_limit": "energía diaria demasiado alta para los kWp",
+		"reject_daily_above_limit": "energía diaria demasiado alta para los kWp", "reject_negative_energy": "energía negativa",
+		"resolved": "Resuelto: %s", "reminder": "Sigue abierto: %s", "resolved_body": "El problema ya no se detecta.",
+		"unknown": "desconocido", "never": "nunca", "error": "Error %d",
+		"forecast_title": "%s: unos %s kWh hoy", "forecast_body": "Previsto según el pronóstico del tiempo para el %s.",
+		"forecast_window": "Mejor momento para grandes consumos: %s–%s.",
 	},
 }
 
@@ -101,9 +122,13 @@ func RenderAlert(locale, kind, subject string, details map[string]any, loc *time
 	case KindUnderperformance:
 		a2 = fmt.Sprintf("%d %%", int(num(details["percent"])))
 		if plane, _ := details["plane"].(string); plane != "" {
-			a4 = fmt.Sprintf(" on “%s”", plane)
-			if l == "de" {
+			switch l {
+			case "de":
 				a4 = fmt.Sprintf(" auf „%s“", plane)
+			case "es":
+				a4 = fmt.Sprintf(" en «%s»", plane)
+			default:
+				a4 = fmt.Sprintf(" on “%s”", plane)
 			}
 		}
 	case KindZeroDay:
@@ -112,8 +137,11 @@ func RenderAlert(locale, kind, subject string, details map[string]any, loc *time
 		a2 = fmt.Sprintf("%d %%", int(num(details["percent"])))
 		a3 = day(l, details["day"])
 		of := "%s of %s kWh"
-		if l == "de" {
+		switch l {
+		case "de":
 			of = "%s von %s kWh"
+		case "es":
+			of = "%s de %s kWh"
 		}
 		a4 = fmt.Sprintf(of, decimal(l, num(details["actual_kwh"])), decimal(l, num(details["expected_kwh"])))
 	case KindClipping:
@@ -229,7 +257,7 @@ func num(v any) float64 {
 // decimal formats v with one decimal in the locale.
 func decimal(l string, v float64) string {
 	s := strconv.FormatFloat(v, 'f', 1, 64)
-	if l == "de" {
+	if l == "de" || l == "es" {
 		s = strings.Replace(s, ".", ",", 1)
 	}
 	return s
@@ -245,23 +273,36 @@ func watts(l string, w float64) string {
 
 func duration(l string, minutes float64) string {
 	m := int(minutes)
-	if m < 120 {
-		if l == "de" {
-			return fmt.Sprintf("%d Minuten", m)
-		}
-		return fmt.Sprintf("%d minutes", m)
+	n := m
+	var unit string
+	switch {
+	case m < 120:
+		unit = locWord(l, "Minuten", "minutos", "minutes")
+	case m/60 < 48:
+		n = m / 60
+		unit = locWord(l, "Stunden", "horas", "hours")
+	default:
+		n = m / 60 / 24
+		unit = locWord(l, "Tagen", "días", "days")
 	}
-	h := m / 60
-	if h < 48 {
-		if l == "de" {
-			return fmt.Sprintf("%d Stunden", h)
-		}
-		return fmt.Sprintf("%d hours", h)
+	return fmt.Sprintf("%d %s", n, unit)
+}
+
+func locWord(l, de, es, en string) string {
+	switch l {
+	case "de":
+		return de
+	case "es":
+		return es
+	default:
+		return en
 	}
-	if l == "de" {
-		return fmt.Sprintf("%d Tagen", h/24)
-	}
-	return fmt.Sprintf("%d days", h/24)
+}
+
+var monthsESShort = []string{"ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sept", "oct", "nov", "dic"}
+
+func esDate(t time.Time) string {
+	return fmt.Sprintf("%d %s %d", t.Day(), monthsESShort[t.Month()-1], t.Year())
 }
 
 func instant(l string, v any, loc *time.Location) string {
@@ -270,10 +311,15 @@ func instant(l string, v any, loc *time.Location) string {
 	if err != nil {
 		return ""
 	}
-	if l == "de" {
-		return t.In(loc).Format("02.01.2006 15:04")
+	t = t.In(loc)
+	switch l {
+	case "de":
+		return t.Format("02.01.2006 15:04")
+	case "es":
+		return esDate(t) + " " + t.Format("15:04")
+	default:
+		return t.Format("Jan 2, 2006 15:04")
 	}
-	return t.In(loc).Format("Jan 2, 2006 15:04")
 }
 
 func day(l string, v any) string {
@@ -282,8 +328,12 @@ func day(l string, v any) string {
 	if err != nil {
 		return s
 	}
-	if l == "de" {
+	switch l {
+	case "de":
 		return t.Format("02.01.2006")
+	case "es":
+		return esDate(t)
+	default:
+		return t.Format("Jan 2, 2006")
 	}
-	return t.Format("Jan 2, 2006")
 }

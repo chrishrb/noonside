@@ -38,7 +38,11 @@ export const zPeriod = z.enum([
     'total'
 ]);
 
-export const zLocale = z.enum(['en', 'de']);
+export const zLocale = z.enum([
+    'en',
+    'de',
+    'es'
+]);
 
 /**
  * Optional server features.

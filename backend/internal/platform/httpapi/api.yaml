@@ -1835,7 +1835,7 @@ components:
 
     Locale:
       type: string
-      enum: [en, de]
+      enum: [en, de, es]
 
     Me:
       type: object
