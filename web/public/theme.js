@@ -10,5 +10,5 @@ try {
       localStorage.removeItem(k);
     }
   }
-  var t = localStorage.getItem('noonside.theme'); if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
+  var t = localStorage.getItem('noonside.theme'); if (t === 'light' || t === 'dark' || t === 'pink') document.documentElement.setAttribute('data-theme', t);
 } catch (e) {}

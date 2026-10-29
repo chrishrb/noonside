@@ -163,7 +163,7 @@ export async function openFeedback(labels: FeedbackLabels, { eventId, onSent }: 
   if (!feedback) return;
   // The app's own theme choice (lib/theme.ts), else the system's.
   const theme = document.documentElement.getAttribute('data-theme');
-  feedback.setTheme(theme === 'dark' || theme === 'light' ? theme : 'system');
+  feedback.setTheme(theme === 'dark' ? 'dark' : theme === 'pink' || theme === 'light' ? 'light' : 'system');
   const form = await feedback.createForm({
     ...labels,
     tags: eventId ? { error_event_id: eventId } : undefined,
