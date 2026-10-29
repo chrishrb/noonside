@@ -24,11 +24,14 @@
       .splash-text { display: flex; align-items: center; gap: 8px; min-height: 24px; font-size: 14px; font-weight: 400; color: #6b6b6b; }
       .splash.gone { opacity: 0; pointer-events: none; }
       @media (prefers-color-scheme: dark) {
-        :root:not([data-theme="light"]) .splash { background: #0e0f11; color: #ececec; }
-        :root:not([data-theme="light"]) .splash-text { color: #9b9ba1; }
+        :root:not([data-theme="light"]):not([data-theme="pink"]) .splash { background: #0e0f11; color: #ececec; }
+        :root:not([data-theme="light"]):not([data-theme="pink"]) .splash-text { color: #9b9ba1; }
       }
       :root[data-theme="dark"] .splash { background: #0e0f11; color: #ececec; }
       :root[data-theme="dark"] .splash-text { color: #9b9ba1; }
+      :root[data-theme="pink"] .splash { background: #ffcfe3; color: #3b1228; }
+      :root[data-theme="pink"] .splash-text { color: #6e3450; }
+      :root[data-theme="pink"] .splash .logo-mark rect { fill: #e40a72; }
     </style>
   </head>
   <body>

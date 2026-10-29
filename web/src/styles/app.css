@@ -846,6 +846,15 @@
 .map-popup-stats dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; }
 /* Dark mode: darkened tiles (OSM has no dark style). */
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .map.leaflet-container .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(0.9) contrast(0.9); }
+  :root:not([data-theme="light"]):not([data-theme="pink"]) .map.leaflet-container .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(0.9) contrast(0.9); }
 }
+/* Pink: the page washes in rose and lilac; cards stay on --surface. */
+:root[data-theme="pink"] body {
+  background:
+    radial-gradient(880px 460px at 0% -8%, #ff9ec8 0%, transparent 55%),
+    radial-gradient(720px 420px at 100% 0%, #e4b3ff 0%, transparent 50%),
+    var(--bg);
+  background-attachment: fixed;
+}
+.seg-emoji { font-size: 15px; line-height: 1; }
 :root[data-theme="dark"] .map.leaflet-container .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(0.9) contrast(0.9); }

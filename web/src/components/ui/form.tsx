@@ -136,14 +136,23 @@ export function FormSection({ title, description, children }: { title: string; d
   );
 }
 
+/** An icon, or an emoji used as the mark (pink mode's heart). */
+export type SegmentMark = IconName | { emoji: string };
+
+function SegmentGlyph({ mark }: { mark?: SegmentMark }) {
+  if (!mark) return null;
+  if (typeof mark === 'object') return <span className="seg-emoji" aria-hidden="true">{mark.emoji}</span>;
+  return <Icon name={mark} size="sm" />;
+}
+
 /** Segmented control as a radio group. */
 export function Segmented<T extends string>({ value, onChange, options, label }: {
-  value: T; onChange: (v: T) => void; options: [T, string, IconName?][]; label: string;
+  value: T; onChange: (v: T) => void; options: [T, string, SegmentMark?][]; label: string;
 }) {
   return (
     <div className="seg" role="radiogroup" aria-label={label}>
-      {options.map(([v, l, icon]) => (
-        <button key={v} type="button" role="radio" aria-checked={v === value} onClick={() => onChange(v)}>{icon && <Icon name={icon} size="sm" />}{l}</button>
+      {options.map(([v, l, mark]) => (
+        <button key={v} type="button" role="radio" aria-checked={v === value} onClick={() => onChange(v)}><SegmentGlyph mark={mark} />{l}</button>
       ))}
     </div>
   );

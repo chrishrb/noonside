@@ -1340,7 +1340,7 @@ export const de: Messages = {
     appearance: 'Darstellung',
     storedInBrowser: 'In diesem Browser gespeichert.',
     theme: 'Design',
-    themes: { system: 'System', light: 'Hell', dark: 'Dunkel' },
+    themes: { system: 'System', light: 'Hell', dark: 'Dunkel', pink: 'Rosa' },
     memberships: 'Mitgliedschaften',
     leaveMessage: 'Sie verlieren sofort den Zugriff. Wenn Sie der letzte Eigentümer sind, machen Sie zuerst jemand anderen zum Eigentümer.',
     noMemberships: 'Keine Mitgliedschaften',

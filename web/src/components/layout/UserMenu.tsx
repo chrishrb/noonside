@@ -12,9 +12,9 @@ import { toast } from '@/components/ui/toast';
 import { useFeedback } from '@/lib/feedback';
 import { sentryEnabled } from '@/lib/sentry';
 import { LANGUAGES, LANGUAGE_NAMES, currentLanguage, setLanguage, type Language } from '@/i18n';
-import { setTheme, useTheme, type Theme } from '@/lib/theme';
+import { PINK_HEART, setTheme, useTheme, type Theme } from '@/lib/theme';
 
-const THEMES: [Theme, IconName][] = [['system', 'monitor'], ['light', 'sun'], ['dark', 'moon']];
+const THEMES: [Theme, IconName | null][] = [['system', 'monitor'], ['light', 'sun'], ['dark', 'moon'], ['pink', null]];
 
 /** Theme as three icon buttons (menu); the profile has the labelled version. */
 export function ThemeToggle() {
@@ -24,7 +24,7 @@ export function ThemeToggle() {
     <div className="seg seg-icons" role="radiogroup" aria-label={t('profile.theme')}>
       {THEMES.map(([v, icon]) => (
         <button key={v} type="button" role="radio" aria-checked={v === theme} aria-label={t(`profile.themes.${v}`)} title={t(`profile.themes.${v}`)}
-          onClick={() => setTheme(v)}><Icon name={icon} size="sm" /></button>
+          onClick={() => setTheme(v)}>{icon ? <Icon name={icon} size="sm" /> : <span className="seg-emoji" aria-hidden="true">{PINK_HEART}</span>}</button>
       ))}
     </div>
   );

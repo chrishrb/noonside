@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/Button';
 import { FormSection, FormSections, Segmented } from '@/components/ui/form';
 import { Card } from '@/components/ui/primitives';
 import { useInstall } from '@/lib/install';
-import { setTheme, useTheme } from '@/lib/theme';
+import { PINK_HEART, setTheme, useTheme } from '@/lib/theme';
 
 export function AppearanceTab() {
   const { t } = useTranslation();
@@ -18,7 +18,7 @@ export function AppearanceTab() {
         <FormSections>
           <FormSection title={t('profile.theme')} description={t('profile.storedInBrowser')}>
             <Segmented label={t('profile.theme')} value={theme} onChange={setTheme}
-              options={[['system', t('profile.themes.system'), 'monitor'], ['light', t('profile.themes.light'), 'sun'], ['dark', t('profile.themes.dark'), 'moon']]} />
+              options={[['system', t('profile.themes.system'), 'monitor'], ['light', t('profile.themes.light'), 'sun'], ['dark', t('profile.themes.dark'), 'moon'], ['pink', t('profile.themes.pink'), { emoji: PINK_HEART }]]} />
           </FormSection>
           <FormSection title={t('language.label')} description={t('profile.languageHelp')}>
             <Segmented label={t('language.label')} value={currentLanguage()} onChange={setLanguage} options={LANGUAGES.map((l) => [l, LANGUAGE_NAMES[l]])} />

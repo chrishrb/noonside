@@ -1,6 +1,7 @@
 /* Design tokens ("Neutral Modern", from the Open Design prototype, with the
    noonside accent).
-   Base colors are redefined for dark mode; everything else derives from them. */
+   Base colors are redefined for dark mode and for pink mode; everything else
+   derives from them. */
 :root {
   color-scheme: light;
   --bg: #fafafa;
@@ -59,7 +60,7 @@
 
 
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
+  :root:not([data-theme="light"]):not([data-theme="pink"]) {
     color-scheme: dark;
     --bg: #0e0f11;
     --surface: #17181b;
@@ -95,4 +96,21 @@
   --shade-warn: 30%;
   --shade-danger: 30%;
   --elev-raised: 0 2px 12px rgb(0 0 0 / 45%);
+}
+
+/* Pink is an explicit theme (never the system preference): the same roles as
+   light mode, in rose. Status colors stay green, amber and red so they don't
+   collapse into the accent. */
+:root[data-theme="pink"] {
+  color-scheme: light;
+  --bg: #ffcfe3;
+  --surface: #ffe8f3;
+  --fg: #3b1228;
+  --muted: #6e3450;
+  --border: #f25a9a;
+  --accent: #e40a72;
+  --accent-text: #9d1454;
+  --accent-soft: color-mix(in oklab, var(--accent), transparent 78%);
+  --brand-ink: #5c1038;
+  --brand-sun: #e40a72;
 }
