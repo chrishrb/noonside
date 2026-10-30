@@ -43,7 +43,7 @@ export type Role = 'owner' | 'admin' | 'viewer';
 
 export type Period = 'day' | 'month' | 'year' | 'total';
 
-export type Locale = 'en' | 'de';
+export type Locale = 'en' | 'de' | 'es';
 
 export type Me = {
     id: string;

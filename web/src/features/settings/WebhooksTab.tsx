@@ -17,7 +17,7 @@ import { CopyButton, Disclosure, useTick } from '@/components/ui/misc';
 import { Badge, Banner, Card, EmptyState, Skeleton, Stat, type BadgeTone } from '@/components/ui/primitives';
 import { Table } from '@/components/ui/Table';
 import { toast, toastError } from '@/components/ui/toast';
-import { LANGUAGE_NAMES } from '@/i18n';
+import { LANGUAGE_NAMES, currentLanguage } from '@/i18n';
 import { fmtDateTime, fmtRel } from '@/lib/format';
 import { applyServerError, type ServerError } from '@/lib/forms';
 import { VERIFY_SNIPPET, newSecret } from '@/features/notifications/NotificationTargets';
@@ -148,7 +148,7 @@ const schema = z.object({
 type Form = z.infer<typeof schema>;
 
 function WebhookDialog({ sys, w, onClose }: { sys: System; w: Webhook | null; onClose: () => void }) {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const invalidate = useInvalidate();
   const create = useMutation(createWebhookMutation());
   const update = useMutation(updateWebhookMutation());
@@ -158,7 +158,7 @@ function WebhookDialog({ sys, w, onClose }: { sys: System; w: Webhook | null; on
     defaultValues: {
       name: w?.name ?? '', url: w?.url ?? '', secret: '', removeSecret: false,
       events: w?.events ?? ['alert.opened', 'alert.resolved'],
-      locale: w?.locale ?? (i18n.language === 'de' ? 'de' : 'en'), enabled: w?.enabled ?? true,
+      locale: w?.locale ?? currentLanguage(), enabled: w?.enabled ?? true,
     },
   });
   const { register, formState: { errors } } = form;

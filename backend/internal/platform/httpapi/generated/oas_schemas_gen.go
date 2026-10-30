@@ -3742,6 +3742,7 @@ type Locale string
 const (
 	LocaleEn Locale = "en"
 	LocaleDe Locale = "de"
+	LocaleEs Locale = "es"
 )
 
 // AllValues returns all Locale values.
@@ -3749,6 +3750,7 @@ func (Locale) AllValues() []Locale {
 	return []Locale{
 		LocaleEn,
 		LocaleDe,
+		LocaleEs,
 	}
 }
 
@@ -3758,6 +3760,8 @@ func (s Locale) MarshalText() ([]byte, error) {
 	case LocaleEn:
 		return []byte(s), nil
 	case LocaleDe:
+		return []byte(s), nil
+	case LocaleEs:
 		return []byte(s), nil
 	default:
 		return nil, errors.Errorf("invalid value: %q", s)
@@ -3772,6 +3776,9 @@ func (s *Locale) UnmarshalText(data []byte) error {
 		return nil
 	case LocaleDe:
 		*s = LocaleDe
+		return nil
+	case LocaleEs:
+		*s = LocaleEs
 		return nil
 	default:
 		return errors.Errorf("invalid value: %q", data)

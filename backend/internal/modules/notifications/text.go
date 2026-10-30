@@ -13,14 +13,18 @@ type Message struct {
 
 // Locales supported for server-rendered text; anything else falls back to
 // English.
-var Locales = []string{"en", "de"}
+var Locales = []string{"en", "de", "es"}
 
 // NormLocale maps a locale to one of Locales.
 func NormLocale(l string) string {
-	if strings.HasPrefix(strings.ToLower(l), "de") {
+	switch {
+	case strings.HasPrefix(strings.ToLower(l), "de"):
 		return "de"
+	case strings.HasPrefix(strings.ToLower(l), "es"):
+		return "es"
+	default:
+		return "en"
 	}
-	return "en"
 }
 
 var phrases = map[string]map[string]string{
@@ -35,6 +39,12 @@ var phrases = map[string]map[string]string{
 		"test_target_body": "Benachrichtigungen von noonside kommen hier an.",
 		"email_heading":    "%d neue Benachrichtigungen", "open_notifications": "Benachrichtigungen öffnen",
 		"manage": "Benachrichtigungen verwalten", "email_footer": "Sie erhalten diese E-Mail, weil Sie Mitglied einer Anlage auf noonside sind.",
+	},
+	"es": {
+		"test_title": "Notificación de prueba", "test_body": "Las notificaciones push funcionan en este dispositivo.",
+		"test_target_body": "Las notificaciones de noonside llegan a este destino.",
+		"email_heading":    "%d notificaciones nuevas", "open_notifications": "Abrir notificaciones",
+		"manage": "Gestionar notificaciones", "email_footer": "Recibe este correo porque es miembro de una instalación en noonside.",
 	},
 }
 
@@ -75,7 +85,7 @@ func RenderNotification(locale string, n Notification) Message {
 	return Message{Title: localized(locale, n.Payload["title"]), Body: localized(locale, n.Payload["body"])}
 }
 
-// localized picks the locale's text from {"en": "...", "de": "..."},
+// localized picks the locale's text from {"en": "...", "de": "...", "es": "..."},
 // falling back to English, or takes a plain string as is.
 func localized(locale string, v any) string {
 	switch t := v.(type) {

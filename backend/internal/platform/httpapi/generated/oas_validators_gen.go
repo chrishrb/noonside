@@ -2915,6 +2915,8 @@ func (s Locale) Validate() error {
 		return nil
 	case "de":
 		return nil
+	case "es":
+		return nil
 	default:
 		return errors.Errorf("invalid value: %v", s)
 	}

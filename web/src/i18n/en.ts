@@ -1,4 +1,4 @@
-// English strings; the source of truth for keys (de.ts must have the same shape).
+// English strings; the source of truth for keys (de.ts and es.ts must have the same shape).
 // Plurals use i18next's `_one` / `_other` suffixes with a `count` option.
 // Keys under `validation` are also used as zod / react-hook-form messages;
 // `Field` translates them when it renders the error.

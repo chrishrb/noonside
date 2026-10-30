@@ -37,6 +37,7 @@ func TestDue(t *testing.T) {
 func TestNumber(t *testing.T) {
 	assert.Equal(t, "1,234.5", number("en", 1234.5, 1))
 	assert.Equal(t, "1.234,5", number("de", 1234.5, 1))
+	assert.Equal(t, "1.234,5", number("es", 1234.5, 1))
 	assert.Equal(t, "1.234.567", number("de", 1234567, 0))
 	assert.Equal(t, "999", number("en", 999, 0))
 	assert.Equal(t, "-12.30", number("en", -12.3, 2))
@@ -62,6 +63,11 @@ func TestEmail(t *testing.T) {
 	require.Len(t, e.Alerts, 1)
 	assert.Equal(t, "Keine Daten von Dach", e.Alerts[0].Title)
 	assert.Equal(t, "12.09.2026 10:00", e.Alerts[0].Body)
+	esMail := Email("es", rep, "https://app.test/")
+	assert.Equal(t, "Dach · Informe mensual septiembre 2026", esMail.Heading)
+	assert.Equal(t, "Dach produjo 950,0 kWh en septiembre 2026. Es el 95 % de la producción esperada.", esMail.Intro)
+	assert.Equal(t, "Sin datos de Dach", esMail.Alerts[0].Title)
+	assert.Equal(t, "12 sept 2026 10:00", esMail.Alerts[0].Body)
 
 	rep.Kind, rep.From, rep.To = KindWeekly, "2026-09-21", "2026-09-28"
 	assert.Equal(t, "Sep 21, 2026 – Sep 27, 2026", PeriodLabel("en", rep))
@@ -70,4 +76,13 @@ func TestEmail(t *testing.T) {
 	e = Email("en", rep, "https://app.test")
 	assert.Equal(t, "Dach produced 950.0 kWh in 2026. That is 95 % of the expected yield.", e.Intro)
 	assert.Contains(t, e.Facts, [2]string{"Previous year", "1,900.0 kWh (−50 %)"})
+}
+
+func TestLocalePhrasesComplete(t *testing.T) {
+	for l, p := range phrases {
+		assert.Len(t, p, len(phrases["en"]), l)
+		for k := range phrases["en"] {
+			assert.NotEmpty(t, p[k], "%s %s", l, k)
+		}
+	}
 }

@@ -9336,6 +9336,8 @@ func (s *Locale) Decode(d *jx.Decoder) error {
 		*s = LocaleEn
 	case LocaleDe:
 		*s = LocaleDe
+	case LocaleEs:
+		*s = LocaleEs
 	default:
 		*s = Locale(v)
 	}
