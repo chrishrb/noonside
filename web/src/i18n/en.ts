@@ -1341,7 +1341,7 @@ export const en = {
     appearance: 'Appearance',
     storedInBrowser: 'Stored in this browser.',
     theme: 'Theme',
-    themes: { system: 'System', light: 'Light', dark: 'Dark' },
+    themes: { system: 'System', light: 'Light', dark: 'Dark', pink: 'Pink' },
     memberships: 'Memberships',
     leaveMessage: 'You lose access right away. If you’re the last owner, make someone else owner first.',
     noMemberships: 'No memberships',

@@ -1340,7 +1340,7 @@ export const es: Messages = {
     appearance: 'Apariencia',
     storedInBrowser: 'Guardado en este navegador.',
     theme: 'Tema',
-    themes: { system: 'Sistema', light: 'Claro', dark: 'Oscuro' },
+    themes: { system: 'Sistema', light: 'Claro', dark: 'Oscuro', pink: 'Rosa' },
     memberships: 'Membresías',
     leaveMessage: 'Pierde el acceso de inmediato. Si es el último propietario, nombre antes a otra persona.',
     noMemberships: 'No hay membresías',
